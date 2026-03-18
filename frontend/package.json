@@ -1,0 +1,17 @@
+{
+  "name": "where-did-i-shoot-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --host 0.0.0.0 --port 3000",
+    "generate:sdk": "openapi-generator-cli generate --generator-key frontend-sdk",
+    "build": "npm run generate:sdk && nuxt build",
+    "start": "node .output/server/index.mjs"
+  },
+  "devDependencies": {
+    "@openapitools/openapi-generator-cli": "^2.25.0"
+  },
+  "dependencies": {
+    "nuxt": "^3.0.0"
+  }
+}

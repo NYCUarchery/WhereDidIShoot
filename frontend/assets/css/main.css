@@ -1,0 +1,40 @@
+:root {
+  color-scheme: dark;
+  --bg: #08111f;
+  --bg-alt: #10203a;
+  --panel: rgba(8, 17, 31, 0.74);
+  --panel-border: rgba(255, 255, 255, 0.12);
+  --text: #f3f6fb;
+  --muted: #9bb0cb;
+  --accent: #7be0bf;
+  --accent-strong: #f0b35b;
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+  font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#__nuxt {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, rgba(123, 224, 191, 0.18), transparent 28%),
+    radial-gradient(circle at top right, rgba(240, 179, 91, 0.2), transparent 24%),
+    linear-gradient(160deg, var(--bg) 0%, var(--bg-alt) 100%);
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font: inherit;
+}

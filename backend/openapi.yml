@@ -1,0 +1,71 @@
+openapi: 3.0.3
+info:
+  title: WhereDidIShoot API
+  version: 0.1.0
+  description: OpenAPI definition for the Flask backend.
+servers:
+  - url: /api
+    description: Nginx-routed API base path
+tags:
+  - name: Health
+    description: Service status endpoints
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      operationId: getHealth
+      summary: Check API and database health
+      responses:
+        "200":
+          description: Backend and database are available.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              examples:
+                ok:
+                  value:
+                    status: ok
+                    service: backend
+                    database: connected
+                    timestamp: "2026-03-18T11:12:33.118124+00:00"
+        "503":
+          description: Backend is reachable, but the database is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              examples:
+                degraded:
+                  value:
+                    status: degraded
+                    service: backend
+                    database: unavailable
+                    timestamp: "2026-03-18T11:12:33.118124+00:00"
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - service
+        - database
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - degraded
+        service:
+          type: string
+          example: backend
+        database:
+          type: string
+          enum:
+            - connected
+            - unavailable
+        timestamp:
+          type: string
+          format: date-time
