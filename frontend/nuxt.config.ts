@@ -1,3 +1,5 @@
+import vuetify, { transformAssetUrls } from 'vite-plugin-vuetify'
+
 const hmrClientPort = process.env.NUXT_HMR_CLIENT_PORT
 const usePolling = process.env.CHOKIDAR_USEPOLLING === 'true'
 
@@ -5,7 +7,10 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-01-01',
   ssr: true,
   devtools: { enabled: false },
-  css: ['~/assets/css/main.css'],
+  css: ['vuetify/styles', '@mdi/font/css/materialdesignicons.css', '~/assets/css/main.css'],
+  build: {
+    transpile: ['vuetify'],
+  },
   runtimeConfig: {
     apiInternalBase: process.env.NUXT_API_INTERNAL_BASE || 'http://backend:5000/api',
     public: {
@@ -16,6 +21,15 @@ export default defineNuxtConfig({
     compressPublicAssets: true,
   },
   vite: {
+    ssr: {
+      noExternal: ['vuetify'],
+    },
+    vue: {
+      template: {
+        transformAssetUrls,
+      },
+    },
+    plugins: [vuetify({ autoImport: true })],
     server: {
       hmr: hmrClientPort
         ? {
@@ -38,7 +52,7 @@ export default defineNuxtConfig({
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         {
           name: 'description',
-          content: 'Nuxt 3 + Flask + MariaDB + Nginx starter stack.',
+          content: 'Mobile-first archery practice logger for users, rounds, ends, and arrows.',
         },
       ],
     },

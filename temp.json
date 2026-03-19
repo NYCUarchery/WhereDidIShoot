@@ -1,0 +1,171 @@
+{
+  "username": "test",
+  "created_at": "2026-03-19T14:02:43",
+  "distance_meters": 50,
+  "id": 1,
+  "notes": "",
+  "target_face_cm": 80,
+  "user_id": 1,
+  "rounds": [
+    {
+      "created_at": "2026-03-19T14:03:31",
+      "id": 1,
+      "name": "Round 1",
+      "notes": "",
+      "practice_id": 1,
+      "round_order": 1,
+      "total_score": 100,
+      "ends": [
+        {
+          "created_at": "2026-03-19T14:13:23",
+          "end_number": 1,
+          "id": 3,
+          "notes": "",
+          "round_id": 1,
+          "total_score": 52,
+          "arrows": [
+            {
+              "arrow_number": 1,
+              "created_at": "2026-03-19T14:33:16",
+              "end_id": 3,
+              "id": 28,
+              "notes": "",
+              "score": 8,
+              "x": 1.26,
+              "y": -10.863
+            },
+            {
+              "arrow_number": 2,
+              "created_at": "2026-03-19T14:33:17",
+              "end_id": 3,
+              "id": 29,
+              "notes": "",
+              "score": 10,
+              "x": 2.058,
+              "y": 3.222
+            },
+            {
+              "arrow_number": 3,
+              "created_at": "2026-03-19T14:33:17",
+              "end_id": 3,
+              "id": 30,
+              "notes": "",
+              "score": 10,
+              "x": 1.46,
+              "y": -2.768
+            },
+            {
+              "arrow_number": 4,
+              "created_at": "2026-03-19T14:33:18",
+              "end_id": 3,
+              "id": 31,
+              "notes": "",
+              "score": 8,
+              "x": -8.523,
+              "y": 2.623
+            },
+            {
+              "arrow_number": 5,
+              "created_at": "2026-03-19T14:33:19",
+              "end_id": 3,
+              "id": 32,
+              "notes": "",
+              "score": 9,
+              "x": 4.055,
+              "y": -4.365
+            },
+            {
+              "arrow_number": 6,
+              "created_at": "2026-03-19T14:33:19",
+              "end_id": 3,
+              "id": 33,
+              "notes": "",
+              "score": 7,
+              "x": 13.838,
+              "y": -1.969
+            }
+          ]
+        },
+        {
+          "created_at": "2026-03-19T14:13:27",
+          "end_number": 2,
+          "id": 4,
+          "notes": "",
+          "round_id": 1,
+          "total_score": 48,
+          "arrows": [
+            {
+              "arrow_number": 1,
+              "created_at": "2026-03-19T14:33:23",
+              "end_id": 4,
+              "id": 34,
+              "notes": "",
+              "score": 8,
+              "x": 1.06,
+              "y": -10.155
+            },
+            {
+              "arrow_number": 2,
+              "created_at": "2026-03-19T14:33:24",
+              "end_id": 4,
+              "id": 35,
+              "notes": "",
+              "score": 9,
+              "x": 3.855,
+              "y": 4.42
+            },
+            {
+              "arrow_number": 3,
+              "created_at": "2026-03-19T14:33:24",
+              "end_id": 4,
+              "id": 36,
+              "notes": "",
+              "score": 10,
+              "x": -3.332,
+              "y": -2.169
+            },
+            {
+              "arrow_number": 4,
+              "created_at": "2026-03-19T14:33:25",
+              "end_id": 4,
+              "id": 37,
+              "notes": "",
+              "score": 7,
+              "x": -11.918,
+              "y": -4.165
+            },
+            {
+              "arrow_number": 5,
+              "created_at": "2026-03-19T14:33:26",
+              "end_id": 4,
+              "id": 38,
+              "notes": "",
+              "score": 7,
+              "x": 5.253,
+              "y": -12.751
+            },
+            {
+              "arrow_number": 6,
+              "created_at": "2026-03-19T14:33:26",
+              "end_id": 4,
+              "id": 39,
+              "notes": "",
+              "score": 7,
+              "x": 14.038,
+              "y": -4.365
+            }
+          ]
+        },
+        {
+          "created_at": "2026-03-19T14:33:32",
+          "end_number": 3,
+          "id": 7,
+          "notes": "",
+          "round_id": 1,
+          "total_score": 0,
+          "arrows": []
+        }
+      ]
+    }
+  ]
+}

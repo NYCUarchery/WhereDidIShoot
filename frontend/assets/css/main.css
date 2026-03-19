@@ -1,15 +1,16 @@
 :root {
-  color-scheme: dark;
-  --bg: #08111f;
-  --bg-alt: #10203a;
-  --panel: rgba(8, 17, 31, 0.74);
-  --panel-border: rgba(255, 255, 255, 0.12);
-  --text: #f3f6fb;
-  --muted: #9bb0cb;
-  --accent: #7be0bf;
-  --accent-strong: #f0b35b;
-  --shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
-  font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+  color-scheme: light;
+  font-family: "IBM Plex Sans", "Avenir Next", "Trebuchet MS", sans-serif;
+  --wdis-primary: #2563eb;
+  --wdis-primary-rgb: 37, 99, 235;
+  --wdis-secondary: #1d4ed8;
+  --wdis-accent: #7dd3fc;
+  --wdis-bg: #eaf2ff;
+  --wdis-surface: #f8fbff;
+  --wdis-surface-rgb: 248, 251, 255;
+  --wdis-ink: #17324d;
+  --wdis-ink-rgb: 23, 50, 77;
+  background: var(--wdis-bg);
 }
 
 * {
@@ -24,17 +25,48 @@ body,
 
 body {
   margin: 0;
-  color: var(--text);
+  color: var(--wdis-ink);
   background:
-    radial-gradient(circle at top left, rgba(123, 224, 191, 0.18), transparent 28%),
-    radial-gradient(circle at top right, rgba(240, 179, 91, 0.2), transparent 24%),
-    linear-gradient(160deg, var(--bg) 0%, var(--bg-alt) 100%);
+    radial-gradient(circle at top left, rgba(125, 211, 252, 0.34), transparent 28%),
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.16), transparent 24%),
+    linear-gradient(180deg, #f5f9ff 0%, #e1ebff 100%);
+}
+
+.v-application {
+  font-family: "IBM Plex Sans", "Avenir Next", "Trebuchet MS", sans-serif;
+  background: transparent !important;
+  color: var(--wdis-ink);
 }
 
 a {
   color: inherit;
+  text-decoration: none;
 }
 
-button {
+button,
+input,
+textarea,
+select {
   font: inherit;
+}
+
+.page-copy {
+  color: rgba(var(--wdis-ink-rgb), 0.76);
+  line-height: 1.65;
+}
+
+.eyebrow {
+  margin: 0 0 0.4rem;
+  color: var(--wdis-primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.metric-value {
+  font-family: "Avenir Next Condensed", "Gill Sans", "Trebuchet MS", sans-serif;
+  font-size: clamp(2rem, 9vw, 3.4rem);
+  font-weight: 700;
+  line-height: 1;
 }

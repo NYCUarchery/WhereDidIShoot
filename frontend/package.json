@@ -9,9 +9,13 @@
     "start": "node .output/server/index.mjs"
   },
   "devDependencies": {
-    "@openapitools/openapi-generator-cli": "^2.25.0"
+    "@openapitools/openapi-generator-cli": "^2.25.0",
+    "sass": "^1.89.2",
+    "vite-plugin-vuetify": "^2.1.2"
   },
   "dependencies": {
-    "nuxt": "^3.0.0"
+    "@mdi/font": "^7.4.47",
+    "nuxt": "^3.0.0",
+    "vuetify": "^3.8.12"
   }
 }
