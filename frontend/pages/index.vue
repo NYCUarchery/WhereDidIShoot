@@ -14,7 +14,6 @@ const sessionUser = useCookie<UserRecord | null>("wdis-user", {
 });
 
 const loginPending = ref(false);
-const practiceSaving = ref(false);
 const deletingPracticeId = ref<number | null>(null);
 const errorMessage = ref("");
 const snackbar = reactive({ show: false, text: "" });
@@ -79,29 +78,8 @@ async function signIn() {
   }
 }
 
-async function createPractice() {
-  if (!sessionUser.value) {
-    return;
-  }
-
-  practiceSaving.value = true;
-  errorMessage.value = "";
-
-  try {
-    await practicesApi.create({
-      notes: "",
-      user_id: sessionUser.value.id,
-    });
-    await loadPractices();
-  } catch (error) {
-    errorMessage.value = getErrorMessage(error);
-  } finally {
-    practiceSaving.value = false;
-  }
-}
-
 async function deletePractice(practice: PracticeRecord) {
-  if (deletingPracticeId.value || practiceSaving.value) {
+  if (deletingPracticeId.value) {
     return;
   }
 
@@ -225,8 +203,7 @@ if (sessionUser.value) {
             prepend-icon="mdi-calendar-plus"
             rounded="xl"
             variant="text"
-            :loading="practiceSaving"
-            @click="createPractice"
+            to="/practices/new"
           >
             New practice
           </v-btn>
@@ -256,8 +233,7 @@ if (sessionUser.value) {
             <v-btn
               color="primary"
               prepend-icon="mdi-calendar-plus"
-              :loading="practiceSaving"
-              @click="createPractice"
+              to="/practices/new"
             >
               Create practice
             </v-btn>
@@ -285,7 +261,7 @@ if (sessionUser.value) {
                   variant="text"
                   aria-label="Delete practice"
                   :loading="deletingPracticeId === practice.id"
-                  :disabled="deletingPracticeId !== null || practiceSaving"
+                  :disabled="deletingPracticeId !== null"
                   @click.stop="deletePractice(practice)"
                 />
                 <v-icon color="primary" icon="mdi-chevron-right" />

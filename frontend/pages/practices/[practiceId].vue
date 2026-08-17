@@ -51,6 +51,12 @@ const practiceNoteForm = reactive({
 const rounds = ref<RoundRecord[]>([]);
 const selectedPractice = ref<PracticeRecord | null>(null);
 
+const targetFaceTypeLabel = computed(() =>
+  selectedPractice.value?.target_face_type === "recurve"
+    ? "Recurve target"
+    : "Compound target"
+);
+
 type EndWithArrows = EndRecord & { arrows: ArrowRecord[] };
 type RoundWithChildren = RoundRecord & { ends: EndWithArrows[] };
 
@@ -324,6 +330,9 @@ await loadPage();
             </v-chip>
             <v-chip color="accent" size="small" variant="tonal">
               {{ selectedPractice.target_face_cm }} cm face
+            </v-chip>
+            <v-chip color="primary" size="small" variant="tonal">
+              {{ targetFaceTypeLabel }}
             </v-chip>
           </div>
 
