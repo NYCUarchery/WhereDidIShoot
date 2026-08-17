@@ -705,6 +705,7 @@ components:
         - user_id
         - distance_meters
         - target_face_cm
+        - target_face_type
         - notes
         - created_at
       properties:
@@ -722,6 +723,10 @@ components:
           type: integer
           minimum: 1
           default: 80
+        target_face_type:
+          type: string
+          enum: [compound, recurve]
+          description: The target face used for this practice, fixed at creation time.
         notes:
           type: string
         created_at:
@@ -744,6 +749,13 @@ components:
           type: integer
           minimum: 1
           default: 80
+        target_face_type:
+          type: string
+          enum: [compound, recurve]
+          description: >-
+            Set at creation and defaults to compound when omitted on create.
+            On update, this field must be omitted or repeated unchanged;
+            sending a different value returns 400.
         notes:
           type: string
           default: ""

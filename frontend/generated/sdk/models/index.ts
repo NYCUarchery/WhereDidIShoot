@@ -335,12 +335,29 @@ export interface PracticeInput {
      */
     target_face_cm?: number;
     /**
+     * Set at creation and defaults to compound when omitted on create. On update, this field must be omitted or repeated unchanged; sending a different value returns 400.
+     * @type {PracticeInputTargetFaceTypeEnum}
+     * @memberof PracticeInput
+     */
+    target_face_type?: PracticeInputTargetFaceTypeEnum;
+    /**
      * 
      * @type {string}
      * @memberof PracticeInput
      */
     notes?: string;
 }
+
+
+/**
+ * @export
+ */
+export const PracticeInputTargetFaceTypeEnum = {
+    compound: 'compound',
+    recurve: 'recurve'
+} as const;
+export type PracticeInputTargetFaceTypeEnum = typeof PracticeInputTargetFaceTypeEnum[keyof typeof PracticeInputTargetFaceTypeEnum];
+
 /**
  * 
  * @export
@@ -372,6 +389,12 @@ export interface PracticeRecord {
      */
     target_face_cm: number;
     /**
+     * The target face used for this practice, fixed at creation time.
+     * @type {PracticeRecordTargetFaceTypeEnum}
+     * @memberof PracticeRecord
+     */
+    target_face_type: PracticeRecordTargetFaceTypeEnum;
+    /**
      * 
      * @type {string}
      * @memberof PracticeRecord
@@ -384,6 +407,17 @@ export interface PracticeRecord {
      */
     created_at: string;
 }
+
+
+/**
+ * @export
+ */
+export const PracticeRecordTargetFaceTypeEnum = {
+    compound: 'compound',
+    recurve: 'recurve'
+} as const;
+export type PracticeRecordTargetFaceTypeEnum = typeof PracticeRecordTargetFaceTypeEnum[keyof typeof PracticeRecordTargetFaceTypeEnum];
+
 /**
  * 
  * @export

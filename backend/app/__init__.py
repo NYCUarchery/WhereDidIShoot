@@ -1,5 +1,6 @@
 from flask import Flask
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from .config import Config
 from .extensions import db
@@ -57,6 +58,34 @@ def sync_practices_schema() -> None:
         else set()
     )
 
+    if "target_face_type" not in practice_columns:
+        # Run this ALTER in its own connection/transaction scope, separate from
+        # the shared block below. With multiple gunicorn workers booting
+        # concurrently (no preload_app), two workers can both observe the
+        # column missing and both issue this ALTER; the loser hits a
+        # duplicate-column error. MariaDB implicitly commits DDL, so letting
+        # that failure happen inside the shared `with db.engine.begin()` block
+        # would leave that block's transaction in an unusable state and take
+        # the other, unrelated statements down with it. Here we isolate the
+        # failure, re-inspect the table, and only re-raise if the column
+        # genuinely still doesn't exist (i.e. the failure was not the race).
+        try:
+            with db.engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "ALTER TABLE practices ADD COLUMN target_face_type "
+                        "VARCHAR(20) NOT NULL DEFAULT 'compound'"
+                    )
+                )
+        except (OperationalError, ProgrammingError):
+            practice_columns = {
+                column["name"] for column in inspect(db.engine).get_columns("practices")
+            }
+            if "target_face_type" not in practice_columns:
+                raise
+        else:
+            practice_columns.add("target_face_type")
+
     with db.engine.begin() as connection:
         for column_name in ("title", "location", "practiced_on"):
             if column_name in practice_columns:
@@ -74,6 +103,14 @@ def sync_practices_schema() -> None:
                 text("ALTER TABLE practices ADD COLUMN target_face_cm INTEGER NOT NULL DEFAULT 80")
             )
             practice_columns.add("target_face_cm")
+
+        connection.execute(
+            text(
+                "UPDATE practices "
+                "SET target_face_type = 'compound' "
+                "WHERE target_face_type IS NULL OR target_face_type = ''"
+            )
+        )
 
         if {"distance_meters", "target_face_cm"}.issubset(round_columns):
             practice_ids = connection.execute(

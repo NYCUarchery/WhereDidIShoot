@@ -52,6 +52,12 @@ class Practice(TimestampMixin, db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     distance_meters = db.Column(db.Integer, nullable=False, default=50)
     target_face_cm = db.Column(db.Integer, nullable=False, default=80)
+    target_face_type = db.Column(
+        db.String(20),
+        nullable=False,
+        default="compound",
+        server_default="compound",
+    )
     notes = db.Column(db.Text, nullable=False, default="")
 
     user = db.relationship("User", back_populates="practices")
@@ -68,6 +74,7 @@ class Practice(TimestampMixin, db.Model):
             "user_id": self.user_id,
             "distance_meters": self.distance_meters,
             "target_face_cm": self.target_face_cm,
+            "target_face_type": self.target_face_type,
             "notes": self.notes,
             "created_at": self.created_at.isoformat(),
         }

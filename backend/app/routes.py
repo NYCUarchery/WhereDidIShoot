@@ -14,6 +14,8 @@ api = Blueprint("api", __name__, url_prefix="/api")
 MAX_ARROWS_PER_END = 6
 DEFAULT_DISTANCE_METERS = 50
 DEFAULT_TARGET_FACE_CM = 80
+DEFAULT_TARGET_FACE_TYPE = "compound"
+VALID_TARGET_FACE_TYPES = ("compound", "recurve")
 INNER_TEN_SCORE_RADIUS_CM = 2.339
 VALID_ARROW_SCORE_MARKS = {"", "X", "M"}
 
@@ -24,6 +26,7 @@ class ValidationError(ValueError):
 
 @api.errorhandler(ValidationError)
 def handle_validation_error(error: ValidationError):
+    db.session.rollback()
     return jsonify({"message": str(error)}), 400
 
 
@@ -65,6 +68,15 @@ def parse_float(value: object, field_name: str) -> float:
         return float(value)
     except (TypeError, ValueError) as exc:
         raise ValidationError(f"{field_name} must be a number.") from exc
+
+
+def clean_target_face_type(value: object) -> str:
+    cleaned = clean_text(value, "target_face_type")
+    if cleaned not in VALID_TARGET_FACE_TYPES:
+        raise ValidationError(
+            f"target_face_type must be one of {', '.join(VALID_TARGET_FACE_TYPES)}."
+        )
+    return cleaned
 
 
 def clean_arrow_score_mark(value: object) -> str:
@@ -149,6 +161,16 @@ def apply_practice_payload(practice: Practice, data: dict) -> Practice:
             "target_face_cm",
             minimum=1,
         )
+    if practice.id is None:
+        raw_target_face_type = data.get("target_face_type")
+        if raw_target_face_type is None:
+            practice.target_face_type = DEFAULT_TARGET_FACE_TYPE
+        else:
+            practice.target_face_type = clean_target_face_type(raw_target_face_type)
+    elif "target_face_type" in data and data.get("target_face_type") is not None:
+        target_face_type = clean_target_face_type(data.get("target_face_type"))
+        if target_face_type != practice.target_face_type:
+            raise ValidationError("target_face_type cannot be changed after creation.")
     practice.notes = clean_text(data.get("notes"), "notes")
     return practice
 

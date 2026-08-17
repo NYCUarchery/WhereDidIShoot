@@ -9,6 +9,7 @@ Name | Type
 `user_id` | number
 `distance_meters` | number
 `target_face_cm` | number
+`target_face_type` | string
 `notes` | string
 
 
