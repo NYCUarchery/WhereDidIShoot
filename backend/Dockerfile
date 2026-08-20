@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 FROM base AS dev
 
 COPY app ./app
+COPY migrations ./migrations
 COPY gunicorn.conf.py ./
 COPY wsgi.py ./
 
@@ -24,6 +25,7 @@ CMD ["flask", "run", "--debug", "--host=0.0.0.0", "--port=5000"]
 FROM base AS runtime
 
 COPY app ./app
+COPY migrations ./migrations
 COPY gunicorn.conf.py ./
 COPY wsgi.py ./
 
