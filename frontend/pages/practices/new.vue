@@ -173,12 +173,17 @@ async function createPractice() {
   line-height: 1.4;
 }
 
+/* Vuetify puts `grid-area: control` on every .v-selection-control, which is
+   inert while this container keeps its native `display: flex`. Turning the
+   container into a grid makes both radios claim the same named area and stack
+   them on top of each other, so only add the gap. */
 :deep(.target-face-group .v-selection-control-group) {
-  display: grid;
   gap: 0.65rem;
 }
 
 :deep(.target-face-option) {
+  /* Vuetify's `flex: 1 0` would make both cards share the column height. */
+  flex: 0 0 auto;
   align-items: flex-start;
   border: 1px solid rgba(var(--wdis-ink-rgb), 0.12);
   border-radius: 18px;
