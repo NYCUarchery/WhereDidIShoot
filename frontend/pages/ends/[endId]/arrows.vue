@@ -5,6 +5,7 @@ import { getErrorMessage, useArrowsApi, useEndsApi, usePracticesApi, useRoundsAp
 import {
   ARROW_RADIUS_CM,
   INNER_TEN_RADIUS_CM,
+  RING_LINE_STROKE,
   RING_LINE_WIDTH_CM,
   TARGET_FACE_CONFIGS,
   getScoreColorBand,
@@ -1115,13 +1116,13 @@ await loadPage();
               />
 
               <circle
-                v-for="radius in activeRingBoundaries"
-                :key="radius"
+                v-for="boundary in activeRingBoundaries"
+                :key="boundary.radius"
                 cx="0"
                 cy="0"
-                :r="radius"
+                :r="boundary.radius"
                 fill="none"
-                stroke="#1f2937"
+                :stroke="boundary.stroke"
                 :stroke-width="RING_LINE_WIDTH_CM"
               />
               <circle
@@ -1129,7 +1130,7 @@ await loadPage();
                 cy="0"
                 :r="INNER_TEN_RADIUS_CM"
                 fill="none"
-                stroke="#1f2937"
+                :stroke="RING_LINE_STROKE"
                 :stroke-width="RING_LINE_WIDTH_CM"
               />
               <g class="target-center-cross" aria-hidden="true">

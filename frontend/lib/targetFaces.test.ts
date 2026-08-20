@@ -3,6 +3,8 @@ import {
   ARROW_RADIUS_CM,
   INNER_TEN_RADIUS_CM,
   RING_LINE_SCORING_ALLOWANCE_CM,
+  RING_LINE_STROKE,
+  RING_LINE_STROKE_ON_BLACK,
   RING_WIDTH_CM,
   TARGET_FACE_CONFIGS,
   getScoreColorBand,
@@ -175,5 +177,38 @@ describe("isTargetFaceType", () => {
     ["compound"],
   ])("rejects %p", (value) => {
     expect(isTargetFaceType(value)).toBe(false);
+  });
+});
+
+describe("ring separator strokes", () => {
+  // A separator line sits inside the higher-scoring ring it bounds, so the
+  // lines bounding the black 4 and 3 rings must be light or they vanish.
+  it.each([
+    [28, RING_LINE_STROKE_ON_BLACK],
+    [32, RING_LINE_STROKE_ON_BLACK],
+    [24, RING_LINE_STROKE],
+    [36, RING_LINE_STROKE],
+    [40, RING_LINE_STROKE],
+    [4, RING_LINE_STROKE],
+  ])("draws the recurve %p cm boundary in %s", (radius, stroke) => {
+    const boundary = TARGET_FACE_CONFIGS.recurve.ringBoundaries.find(
+      (item) => item.radius === radius
+    );
+
+    expect(boundary?.stroke).toBe(stroke);
+  });
+
+  it("keeps every compound boundary dark, as it has no black rings", () => {
+    for (const boundary of TARGET_FACE_CONFIGS.compound.ringBoundaries) {
+      expect(boundary.stroke).toBe(RING_LINE_STROKE);
+    }
+  });
+
+  it("draws one boundary line per ring", () => {
+    for (const config of Object.values(TARGET_FACE_CONFIGS)) {
+      expect(config.ringBoundaries.map((boundary) => boundary.radius)).toEqual(
+        config.rings.map((ring) => ring.outerRadius)
+      );
+    }
   });
 });

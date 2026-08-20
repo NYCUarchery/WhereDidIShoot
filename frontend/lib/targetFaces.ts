@@ -13,6 +13,13 @@ export interface TargetPoint {
   y: number;
 }
 
+export interface TargetRingBoundary {
+  /** Radius at which the separator line is drawn. */
+  readonly radius: number;
+  /** Stroke colour for that line (light inside the black rings, dark elsewhere). */
+  readonly stroke: string;
+}
+
 export interface TargetRing {
   readonly score: number;
   readonly outerRadius: number;
@@ -25,8 +32,8 @@ export interface TargetFaceConfig {
   readonly descriptionLabel: string;
   /** Scoring rings, ascending by score (and therefore descending by radius). */
   readonly rings: readonly TargetRing[];
-  /** Radii at which ring separator lines are drawn; one per ring, outer edge first. */
-  readonly ringBoundaries: readonly number[];
+  /** Ring separator lines, one per ring, outer edge first. */
+  readonly ringBoundaries: readonly TargetRingBoundary[];
   /** Beyond this radius (after arrow-radius/line-allowance shrink) the shot is a miss. */
   readonly scoringOuterRadius: number;
   /** Exactly two dashed guide-ring radii drawn outside the scoring rings. */
@@ -42,6 +49,10 @@ export const ARROW_RADIUS_CM = ARROW_DIAMETER_CM / 2;
 export const RING_LINE_WIDTH_CM = 0.12;
 export const RING_LINE_SCORING_ALLOWANCE_CM = RING_LINE_WIDTH_CM / 2;
 export const INNER_TEN_RADIUS_CM = 2;
+// Ring separator lines sit inside the higher-scoring ring they bound, so a
+// line bounding a black ring has to be drawn light to stay visible at all.
+export const RING_LINE_STROKE = "#1f2937";
+export const RING_LINE_STROKE_ON_BLACK = "#ffffff";
 
 // Matches backend/app/routes.py INNER_TEN_SCORE_RADIUS_CM = 2.339 exactly:
 // INNER_TEN_RADIUS_CM (2) + ARROW_RADIUS_CM (0.279) + RING_LINE_SCORING_ALLOWANCE_CM (0.06) = 2.339
@@ -90,7 +101,10 @@ function buildTargetFaceConfig(
     type,
     descriptionLabel,
     rings,
-    ringBoundaries: rings.map((ring) => ring.outerRadius),
+    ringBoundaries: rings.map((ring) => ({
+      radius: ring.outerRadius,
+      stroke: ring.fill === BLACK_FILL ? RING_LINE_STROKE_ON_BLACK : RING_LINE_STROKE,
+    })),
     scoringOuterRadius,
     missGuideRadii,
     maxPlottedRadius: missGuideRadii[1],
