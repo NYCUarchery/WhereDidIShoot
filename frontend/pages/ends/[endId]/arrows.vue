@@ -1,7 +1,19 @@
 <script setup lang="ts">
-import type { ArrowInput, ArrowRecord, EndRecord, RoundRecord } from "~/generated/sdk";
+import type { ArrowInput, ArrowRecord, EndRecord, PracticeRecord, RoundRecord } from "~/generated/sdk";
 
-import { getErrorMessage, useArrowsApi, useEndsApi, useRoundsApi } from "~/lib/api";
+import { getErrorMessage, useArrowsApi, useEndsApi, usePracticesApi, useRoundsApi } from "~/lib/api";
+import {
+  ARROW_RADIUS_CM,
+  INNER_TEN_RADIUS_CM,
+  RING_LINE_STROKE,
+  RING_LINE_WIDTH_CM,
+  TARGET_FACE_CONFIGS,
+  getScoreColorBand,
+  isInnerTenPoint,
+  isTargetFaceType,
+  scoreForPoint,
+  type TargetFaceConfig,
+} from "~/lib/targetFaces";
 
 type TargetPoint = {
   x: number;
@@ -22,67 +34,46 @@ type PointerFraction = {
 
 type ScoreMark = "" | "X" | "M";
 
-const SIX_RING_OUTER_RADIUS_CM = 24;
-const TARGET_DIAMETER_CM = SIX_RING_OUTER_RADIUS_CM * 2;
-const TARGET_RADIUS_CM = TARGET_DIAMETER_CM / 2;
-const RING_WIDTH_CM = 4;
-const OUTSIDE_TARGET_RING_COUNT = 2;
-const MAX_PLOTTED_RADIUS_CM = TARGET_RADIUS_CM + RING_WIDTH_CM * OUTSIDE_TARGET_RING_COUNT;
-const INNER_TEN_RADIUS_CM = 2;
 const TARGET_CENTER_CROSS_LINE_WIDTH_CM = 0.1;
 const TARGET_CENTER_CROSS_LINE_LENGTH_CM = 0.4;
 const TARGET_CENTER_CROSS_HALF_LENGTH_CM = TARGET_CENTER_CROSS_LINE_LENGTH_CM / 2;
-const RING_LINE_WIDTH_CM = 0.12;
-const RING_LINE_SCORING_ALLOWANCE_CM = RING_LINE_WIDTH_CM / 2;
-const SCORING_TOLERANCE_CM = 1e-9;
-const ARROW_DIAMETER_CM = 0.558;
-const ARROW_RADIUS_CM = ARROW_DIAMETER_CM / 2;
-const PLACED_MARKER_RADIUS_CM = 1;
+// Reference (compound-face) marker size/view-size figures. Placed-marker
+// radius/font-size are scaled from these so they keep a constant on-screen
+// size across faces with different view extents (see targetMarkerScale
+// below); the compound face's scale factor is exactly 1 by construction.
+const BASE_PLACED_MARKER_RADIUS_CM = 1;
+const BASE_PLACED_MARKER_FONT_SIZE_CM = 1.28;
 const DRAG_MARKER_FONT_SIZE_CM = 0.24;
 const DRAG_MARKER_WIDE_FONT_SIZE_CM = 0.2;
-const PLACED_MARKER_FONT_SIZE_CM = 1.28;
 const DRAG_THRESHOLD_PX = 2;
 const TOUCH_TARGET_Y_OFFSET_CM = 2;
 const DESKTOP_TARGET_Y_OFFSET_CM = 1;
 const TARGET_VIEW_MARGIN_CM = 0.8;
-const TARGET_VIEW_EXTENT_CM =
-  MAX_PLOTTED_RADIUS_CM + PLACED_MARKER_RADIUS_CM + TARGET_VIEW_MARGIN_CM;
-const TARGET_VIEW_SIZE_CM = TARGET_VIEW_EXTENT_CM * 2;
+const BASE_TARGET_VIEW_SIZE_CM =
+  (TARGET_FACE_CONFIGS.compound.maxPlottedRadius +
+    BASE_PLACED_MARKER_RADIUS_CM +
+    TARGET_VIEW_MARGIN_CM) *
+  2;
 const DRAG_ZOOM_VIEW_SIZE_CM = 18;
 const COORDINATE_PRECISION_DECIMALS = 3;
 const COORDINATE_PRECISION_FACTOR = 10 ** COORDINATE_PRECISION_DECIMALS;
 const MAX_ARROWS_PER_END = 6;
-const DEFAULT_TARGET_VIEW_BOX: ViewBox = {
-  minX: -TARGET_VIEW_EXTENT_CM,
-  minY: -TARGET_VIEW_EXTENT_CM,
-  width: TARGET_VIEW_SIZE_CM,
-  height: TARGET_VIEW_SIZE_CM,
-};
-
-const scoringRings = [
-  { score: 5, radius: 24, fill: "#5c87c8" },
-  { score: 6, radius: 20, fill: "#5c87c8" },
-  { score: 7, radius: 16, fill: "#d54a3f" },
-  { score: 8, radius: 12, fill: "#d54a3f" },
-  { score: 9, radius: 8, fill: "#f4c54d" },
-  { score: 10, radius: 4, fill: "#f4c54d" },
-] as const;
-
-const ringBoundaries = scoringRings.map((ring) => ring.radius);
-const missGuideRings = Array.from(
-  { length: OUTSIDE_TARGET_RING_COUNT },
-  (_, index) => TARGET_RADIUS_CM + RING_WIDTH_CM * (index + 1)
-);
+// The archery target face is nominally 80 cm regardless of practice
+// distance/config; do not substitute the practice's target_face_cm here,
+// as scoring geometry is not scaled by it (see TARGET_FACE_CONFIGS).
+const TARGET_FACE_LABEL_CM = 80;
 
 const route = useRoute();
 const arrowsApi = useArrowsApi();
 const endsApi = useEndsApi();
 const roundsApi = useRoundsApi();
+const practicesApi = usePracticesApi();
 
 const targetSvg = ref<SVGSVGElement | null>(null);
 const arrows = ref<ArrowRecord[]>([]);
 const end = ref<EndRecord | null>(null);
 const round = ref<RoundRecord | null>(null);
+const practice = ref<PracticeRecord | null>(null);
 const roundEnds = ref<EndRecord[]>([]);
 const errorMessage = ref("");
 const pending = ref(false);
@@ -95,6 +86,8 @@ const dragPoint = ref<TargetPoint | null>(null);
 const dragStartClient = ref<{ x: number; y: number } | null>(null);
 const dragPointerFraction = ref<PointerFraction | null>(null);
 const dragMoved = ref(false);
+const dragCommitOnRelease = ref(false);
+const focusedArrowId = ref<number | null>(null);
 const snackbar = reactive({ show: false, text: "" });
 let nextOptimisticArrowId = -1;
 
@@ -121,6 +114,9 @@ const nextEnd = computed(() =>
     : null
 );
 const dragArrowPoint = computed(() => getDragArrowPoint());
+const focusedArrow = computed(
+  () => orderedArrows.value.find((arrow) => arrow.id === focusedArrowId.value) ?? null
+);
 const liveDragLabel = computed(() => {
   if (!dragArrowPoint.value) {
     return null;
@@ -137,11 +133,64 @@ const backToEndsLink = computed(() => {
 });
 const targetViewBox = computed(() => stringifyViewBox(getActiveTargetViewBox()));
 const renderedDragPoint = computed(() => getRenderedDraftPoint());
+const activeTargetFaceConfig = computed<TargetFaceConfig>(
+  () => resolveTargetFaceConfig(practice.value) ?? TARGET_FACE_CONFIGS.compound
+);
+const targetViewExtentCm = computed(
+  () =>
+    activeTargetFaceConfig.value.maxPlottedRadius +
+    BASE_PLACED_MARKER_RADIUS_CM +
+    TARGET_VIEW_MARGIN_CM
+);
+const targetViewSizeCm = computed(() => targetViewExtentCm.value * 2);
+const defaultTargetViewBox = computed<ViewBox>(() => ({
+  minX: -targetViewExtentCm.value,
+  minY: -targetViewExtentCm.value,
+  width: targetViewSizeCm.value,
+  height: targetViewSizeCm.value,
+}));
+// Placed-marker on-screen size scale factor: 1 for the compound face (its
+// view size is exactly BASE_TARGET_VIEW_SIZE_CM by construction) and > 1 for
+// faces with a larger view extent (e.g. recurve), so markers/digits keep a
+// constant apparent size across faces instead of shrinking as the view grows.
+const targetMarkerScale = computed(() => targetViewSizeCm.value / BASE_TARGET_VIEW_SIZE_CM);
+const placedMarkerRadiusCm = computed(
+  () => BASE_PLACED_MARKER_RADIUS_CM * targetMarkerScale.value
+);
+const placedMarkerFontSizeCm = computed(
+  () => BASE_PLACED_MARKER_FONT_SIZE_CM * targetMarkerScale.value
+);
+const activeRingsDescending = computed(() =>
+  [...activeTargetFaceConfig.value.rings].sort(
+    (left, right) => right.outerRadius - left.outerRadius
+  )
+);
+const activeRingBoundaries = computed(() => activeTargetFaceConfig.value.ringBoundaries);
+const activeMissGuideRadii = computed(() => activeTargetFaceConfig.value.missGuideRadii);
+const targetAriaLabel = computed(() => {
+  const config = activeTargetFaceConfig.value;
+  return `${TARGET_FACE_LABEL_CM} centimeter ${config.descriptionLabel} archery target face`;
+});
 
 function parseNumericId(value: unknown) {
   const raw = Array.isArray(value) ? value[0] : value;
   const parsed = Number(raw);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function resolveTargetFaceConfig(record: PracticeRecord | null): TargetFaceConfig | null {
+  if (!record) {
+    return null;
+  }
+
+  const rawTargetFaceType = record.target_face_type as unknown;
+  if (rawTargetFaceType === undefined) {
+    return TARGET_FACE_CONFIGS.compound;
+  }
+
+  return typeof rawTargetFaceType === "string" && isTargetFaceType(rawTargetFaceType)
+    ? TARGET_FACE_CONFIGS[rawTargetFaceType]
+    : null;
 }
 
 function notify(text: string) {
@@ -174,36 +223,19 @@ function clampPointToRadius(point: TargetPoint, maxRadius: number) {
 }
 
 function sanitizePoint(point: TargetPoint) {
-  const clamped = clampPointToRadius(point, MAX_PLOTTED_RADIUS_CM);
+  const clamped = clampPointToRadius(point, activeTargetFaceConfig.value.maxPlottedRadius);
   return {
     x: roundCoordinate(clamped.x),
     y: roundCoordinate(clamped.y),
   };
 }
 
-function getRadius(point: TargetPoint) {
-  return Math.sqrt(point.x ** 2 + point.y ** 2);
-}
-
-function getScoringRadius(point: TargetPoint) {
-  return Math.max(getRadius(point) - ARROW_RADIUS_CM - RING_LINE_SCORING_ALLOWANCE_CM, 0);
-}
-
 function isInnerTen(point: TargetPoint) {
-  return getScoringRadius(point) <= INNER_TEN_RADIUS_CM;
+  return isInnerTenPoint(point);
 }
 
 function getScore(point: TargetPoint) {
-  const radius = getScoringRadius(point);
-  if (radius > SIX_RING_OUTER_RADIUS_CM) {
-    return 0;
-  }
-
-  const band = Math.max(
-    Math.ceil((radius - SCORING_TOLERANCE_CM) / RING_WIDTH_CM) - 1,
-    0
-  );
-  return 10 - band;
+  return scoreForPoint(activeTargetFaceConfig.value, point);
 }
 
 function getScoreMark(point: TargetPoint): ScoreMark {
@@ -317,12 +349,13 @@ function getPointerFractionFromEvent(event: PointerEvent) {
 }
 
 function clampViewBoxStart(value: number, size: number) {
-  return Math.min(Math.max(value, -TARGET_VIEW_EXTENT_CM), TARGET_VIEW_EXTENT_CM - size);
+  const extent = targetViewExtentCm.value;
+  return Math.min(Math.max(value, -extent), extent - size);
 }
 
 function getActiveTargetViewBox(): ViewBox {
   if (!dragMode.value || !dragPoint.value || !dragPointerFraction.value) {
-    return DEFAULT_TARGET_VIEW_BOX;
+    return defaultTargetViewBox.value;
   }
 
   return {
@@ -343,7 +376,7 @@ function stringifyViewBox(viewBox: ViewBox) {
   return [viewBox.minX, viewBox.minY, viewBox.width, viewBox.height].join(" ");
 }
 
-function getPointFromEvent(event: PointerEvent, viewBox = DEFAULT_TARGET_VIEW_BOX) {
+function getPointFromEvent(event: PointerEvent, viewBox = defaultTargetViewBox.value) {
   const pointerFraction = getPointerFractionFromEvent(event);
   if (!pointerFraction) {
     return null;
@@ -355,7 +388,7 @@ function getPointFromEvent(event: PointerEvent, viewBox = DEFAULT_TARGET_VIEW_BO
   return sanitizePoint({ x, y });
 }
 
-function getDragPointFromEvent(event: PointerEvent, viewBox = DEFAULT_TARGET_VIEW_BOX) {
+function getDragPointFromEvent(event: PointerEvent, viewBox = defaultTargetViewBox.value) {
   const point = getPointFromEvent(event, viewBox);
   if (!point) {
     return null;
@@ -399,19 +432,7 @@ function getScoreBadgeLabel(arrow: ArrowRecord) {
 }
 
 function getScoreBadgeClass(arrow: ArrowRecord) {
-  if (arrow.score >= 9) {
-    return "score-badge--gold";
-  }
-
-  if (arrow.score >= 7) {
-    return "score-badge--red";
-  }
-
-  if (arrow.score >= 5) {
-    return "score-badge--blue";
-  }
-
-  return "score-badge--miss";
+  return `score-badge--${getScoreColorBand(arrow.score)}`;
 }
 
 function getMarkerLabel(arrow: ArrowRecord) {
@@ -427,20 +448,7 @@ function getMarkerLabel(arrow: ArrowRecord) {
 }
 
 function getMarkerClassForPoint(point: TargetPoint) {
-  const score = getScore(point);
-  if (score >= 9) {
-    return "target-marker--gold";
-  }
-
-  if (score >= 7) {
-    return "target-marker--red";
-  }
-
-  if (score >= 5) {
-    return "target-marker--blue";
-  }
-
-  return "target-marker--miss";
+  return `target-marker--${getScoreColorBand(getScore(point))}`;
 }
 
 function getMarkerClass(arrow: ArrowRecord) {
@@ -462,7 +470,7 @@ function isDraggedArrow(arrow: ArrowRecord) {
 }
 
 function getMarkerRadius(arrow: ArrowRecord) {
-  return isDraggedArrow(arrow) ? ARROW_RADIUS_CM : PLACED_MARKER_RADIUS_CM;
+  return isDraggedArrow(arrow) ? ARROW_RADIUS_CM : placedMarkerRadiusCm.value;
 }
 
 function getMarkerFontSize(label: string | null, isDragging = false) {
@@ -474,7 +482,7 @@ function getMarkerFontSize(label: string | null, isDragging = false) {
     return label.length > 1 ? DRAG_MARKER_WIDE_FONT_SIZE_CM : DRAG_MARKER_FONT_SIZE_CM;
   }
 
-  return PLACED_MARKER_FONT_SIZE_CM;
+  return placedMarkerFontSizeCm.value;
 }
 
 async function loadPage() {
@@ -482,8 +490,10 @@ async function loadPage() {
   errorMessage.value = "";
   end.value = null;
   round.value = null;
+  practice.value = null;
   arrows.value = [];
   roundEnds.value = [];
+  focusedArrowId.value = null;
 
   try {
     if (!endId.value) {
@@ -491,14 +501,29 @@ async function loadPage() {
     }
 
     const currentEnd = await endsApi.get(endId.value);
-    const [currentRound, endArrows, siblingEnds] = await Promise.all([
-      roundsApi.get(currentEnd.round_id),
+    const roundPromise = roundsApi.get(currentEnd.round_id);
+    const [currentRound, currentPractice, endArrows, siblingEnds] = await Promise.all([
+      roundPromise,
+      roundPromise.then((currentRoundResult) =>
+        practicesApi.get(currentRoundResult.practice_id)
+      ),
       arrowsApi.list({ end_id: endId.value }),
       endsApi.list({ round_id: currentEnd.round_id }),
     ]);
 
+    if (!resolveTargetFaceConfig(currentPractice)) {
+      const rawTargetFaceType = (currentPractice as { target_face_type?: unknown })
+        .target_face_type;
+      throw new Error(
+        `This practice has an unrecognized target face type ("${String(
+          rawTargetFaceType
+        )}"). Update the practice before scoring arrows.`
+      );
+    }
+
     end.value = currentEnd;
     round.value = currentRound;
+    practice.value = currentPractice;
     arrows.value = endArrows;
     roundEnds.value = siblingEnds;
   } catch (error) {
@@ -684,6 +709,22 @@ async function deleteArrow(arrow: ArrowRecord) {
   }
 }
 
+async function deleteFocusedArrow() {
+  const arrow = focusedArrow.value;
+  if (!arrow) {
+    return;
+  }
+
+  await deleteArrow(arrow);
+
+  // deleteArrow's optimistic removal trips the stale-focus watcher; if the
+  // request failed the arrow is rolled back, so restore focus rather than
+  // dropping the user's editing context on an error they can retry.
+  if (arrows.value.some((item) => item.id === arrow.id)) {
+    focusedArrowId.value = arrow.id;
+  }
+}
+
 function startDragging(pointerId: number, pointerType: PointerEvent["pointerType"]) {
   activePointerId.value = pointerId;
   activePointerType.value = pointerType;
@@ -695,8 +736,34 @@ function startDragging(pointerId: number, pointerType: PointerEvent["pointerType
   }
 }
 
+function beginFocusedArrowRelocate(arrowId: number, event: PointerEvent) {
+  const point = getDragPointFromEvent(event);
+  if (!point) {
+    return;
+  }
+
+  dragMode.value = "update";
+  dragArrowId.value = arrowId;
+  dragPoint.value = point;
+  dragStartClient.value = { x: event.clientX, y: event.clientY };
+  dragPointerFraction.value = getPointerFractionFromEvent(event);
+  dragMoved.value = false;
+  // A bare tap is an explicit relocate gesture in focus mode, so it commits
+  // without the drag-distance requirement that guards marker dragging.
+  dragCommitOnRelease.value = true;
+  startDragging(event.pointerId, event.pointerType);
+}
+
 function handleTargetPointerDown(event: PointerEvent) {
-  if (saving.value) {
+  if (saving.value || activePointerId.value !== null || dragMode.value) {
+    return;
+  }
+
+  if (focusedArrowId.value !== null) {
+    // While an arrow is focused the whole target face relocates that arrow
+    // instead of creating a new one, so this path deliberately skips the
+    // canCreateArrow guard: a full end can still be corrected.
+    beginFocusedArrowRelocate(focusedArrowId.value, event);
     return;
   }
 
@@ -715,11 +782,20 @@ function handleTargetPointerDown(event: PointerEvent) {
   dragStartClient.value = { x: event.clientX, y: event.clientY };
   dragPointerFraction.value = getPointerFractionFromEvent(event);
   dragMoved.value = false;
+  dragCommitOnRelease.value = false;
   startDragging(event.pointerId, event.pointerType);
 }
 
 function handleMarkerPointerDown(arrow: ArrowRecord, event: PointerEvent) {
-  if (saving.value) {
+  if (saving.value || activePointerId.value !== null || dragMode.value) {
+    return;
+  }
+
+  // In focus mode the placed markers are part of the relocate surface too, so
+  // a press anywhere — including on top of another marker — moves the focused
+  // arrow rather than grabbing whichever marker is under the pointer.
+  if (focusedArrowId.value !== null) {
+    beginFocusedArrowRelocate(focusedArrowId.value, event);
     return;
   }
 
@@ -734,7 +810,42 @@ function handleMarkerPointerDown(arrow: ArrowRecord, event: PointerEvent) {
   dragStartClient.value = { x: event.clientX, y: event.clientY };
   dragPointerFraction.value = getPointerFractionFromEvent(event);
   dragMoved.value = false;
+  dragCommitOnRelease.value = false;
   startDragging(event.pointerId, event.pointerType);
+}
+
+function toggleFocusedArrow(arrow: ArrowRecord) {
+  if (saving.value) {
+    return;
+  }
+
+  if (focusedArrowId.value === arrow.id) {
+    clearFocusedArrow();
+    return;
+  }
+
+  focusedArrowId.value = arrow.id;
+}
+
+function clearFocusedArrow() {
+  // Abandon an in-flight relocate of the focused arrow: without this, Escape
+  // or Done reads as "cancel" but the pending pointerup would still commit the
+  // move (dragCommitOnRelease makes it commit even with no movement).
+  if (
+    focusedArrowId.value !== null &&
+    dragMode.value === "update" &&
+    dragArrowId.value === focusedArrowId.value
+  ) {
+    stopDragging();
+  }
+
+  focusedArrowId.value = null;
+}
+
+function handleKeyDown(event: KeyboardEvent) {
+  if (event.key === "Escape") {
+    clearFocusedArrow();
+  }
 }
 
 function clearDragPreview() {
@@ -749,6 +860,7 @@ function stopPointerTracking() {
   activePointerType.value = null;
   dragStartClient.value = null;
   dragMoved.value = false;
+  dragCommitOnRelease.value = false;
 
   if (import.meta.client) {
     window.removeEventListener("pointermove", handleWindowPointerMove);
@@ -796,6 +908,7 @@ async function handleWindowPointerUp(event: PointerEvent) {
   const arrowId = dragArrowId.value;
   const point = getDragArrowPoint();
   const moved = dragMoved.value;
+  const commitOnRelease = dragCommitOnRelease.value;
 
   stopPointerTracking();
 
@@ -814,7 +927,7 @@ async function handleWindowPointerUp(event: PointerEvent) {
     return;
   }
 
-  if (!moved) {
+  if (!moved && !commitOnRelease) {
     clearDragPreview();
     return;
   }
@@ -837,6 +950,23 @@ watch(
   }
 );
 
+watch(orderedArrows, (records) => {
+  if (
+    focusedArrowId.value !== null &&
+    !records.some((arrow) => arrow.id === focusedArrowId.value)
+  ) {
+    focusedArrowId.value = null;
+  }
+});
+
+onMounted(() => {
+  window.addEventListener("keydown", handleKeyDown);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", handleKeyDown);
+});
+
 onBeforeUnmount(stopDragging);
 
 await loadPage();
@@ -847,10 +977,8 @@ await loadPage();
     <v-alert
       v-if="errorMessage"
       class="mb-2"
-      closable
       color="error"
       variant="tonal"
-      @click:close="errorMessage = ''"
     >
       {{ errorMessage }}
     </v-alert>
@@ -884,10 +1012,21 @@ await loadPage();
           <div class="stage-topbar">
             <div class="score-strip">
               <div v-for="arrow in orderedArrows" :key="arrow.id" class="score-entry">
-                <div class="score-badge" :class="getScoreBadgeClass(arrow)">
+                <button
+                  class="score-badge"
+                  :class="[
+                    getScoreBadgeClass(arrow),
+                    { 'score-badge--focused': focusedArrowId === arrow.id },
+                  ]"
+                  type="button"
+                  :aria-pressed="focusedArrowId === arrow.id"
+                  :aria-label="`Adjust arrow ${arrow.arrow_number}, score ${getScoreBadgeLabel(arrow)}`"
+                  :aria-disabled="saving"
+                  @click="toggleFocusedArrow(arrow)"
+                >
                   <span class="score-order">{{ arrow.arrow_number }}</span>
                   {{ getScoreBadgeLabel(arrow) }}
-                </div>
+                </button>
               </div>
 
               <div v-if="!pending && orderedArrows.length === 0" class="score-empty">
@@ -914,9 +1053,44 @@ await loadPage();
           </div>
 
           <div class="stage-status">
+            <div v-if="focusedArrow" class="focus-bar">
+              <span class="focus-bar__label">Arrow {{ focusedArrow.arrow_number }}</span>
+              <span class="focus-bar__score" :class="getScoreBadgeClass(focusedArrow)">
+                {{ getScoreBadgeLabel(focusedArrow) }}
+              </span>
+              <span class="focus-bar__coords">
+                x {{ focusedArrow.x.toFixed(COORDINATE_PRECISION_DECIMALS) }}
+                y {{ focusedArrow.y.toFixed(COORDINATE_PRECISION_DECIMALS) }}
+              </span>
+              <span class="focus-bar__hint">Tap or drag the target to move this arrow</span>
+              <div class="focus-bar__actions">
+                <v-btn
+                  :disabled="saving"
+                  size="small"
+                  variant="text"
+                  @click="deleteFocusedArrow"
+                >
+                  Delete
+                </v-btn>
+                <v-btn color="primary" size="small" variant="tonal" @click="clearFocusedArrow">
+                  Done
+                </v-btn>
+              </div>
+            </div>
+            <!--
+              The score chip renders unconditionally (blank while idle, with the
+              whole readout visibility:hidden then) because it is the tallest
+              child and so it alone sets this row's height. Gating it on
+              dragArrowPoint grew the row on the very pointerdown that starts a
+              drag, which pushed the SVG down after dragPointerFraction had been
+              captured against the pre-shift rect, rendering the marker below
+              the pressed point until the first pointermove re-anchored it.
+              .stage-status's min-height used to absorb that growth; it no
+              longer can once the focus bar adds a second row.
+            -->
             <div class="drag-coordinates" :class="{ 'drag-coordinates--hidden': !dragArrowPoint }">
+              <span class="drag-coordinates__score">{{ liveDragLabel }}</span>
               <template v-if="dragArrowPoint">
-                <span class="drag-coordinates__score">{{ liveDragLabel }}</span>
                 <span>x {{ dragArrowPoint.x.toFixed(COORDINATE_PRECISION_DECIMALS) }}</span>
                 <span>y {{ dragArrowPoint.y.toFixed(COORDINATE_PRECISION_DECIMALS) }}</span>
               </template>
@@ -929,28 +1103,26 @@ await loadPage();
               class="target-svg"
               :viewBox="targetViewBox"
               role="img"
-              aria-label="80 centimeter six-ring archery target face"
+              :aria-label="targetAriaLabel"
               @pointerdown="handleTargetPointerDown"
             >
               <circle
-                v-for="ring in [...scoringRings].sort(
-                  (left, right) => right.radius - left.radius
-                )"
+                v-for="ring in activeRingsDescending"
                 :key="ring.score"
                 cx="0"
                 cy="0"
-                :r="ring.radius"
+                :r="ring.outerRadius"
                 :fill="ring.fill"
               />
 
               <circle
-                v-for="radius in ringBoundaries"
-                :key="radius"
+                v-for="boundary in activeRingBoundaries"
+                :key="boundary.radius"
                 cx="0"
                 cy="0"
-                :r="radius"
+                :r="boundary.radius"
                 fill="none"
-                stroke="#1f2937"
+                :stroke="boundary.stroke"
                 :stroke-width="RING_LINE_WIDTH_CM"
               />
               <circle
@@ -958,7 +1130,7 @@ await loadPage();
                 cy="0"
                 :r="INNER_TEN_RADIUS_CM"
                 fill="none"
-                stroke="#1f2937"
+                :stroke="RING_LINE_STROKE"
                 :stroke-width="RING_LINE_WIDTH_CM"
               />
               <g class="target-center-cross" aria-hidden="true">
@@ -982,7 +1154,7 @@ await loadPage();
                 />
               </g>
               <circle
-                v-for="radius in missGuideRings"
+                v-for="radius in activeMissGuideRadii"
                 :key="`miss-${radius}`"
                 class="target-miss-guide"
                 cx="0"
@@ -1003,6 +1175,9 @@ await loadPage();
                   {
                     'target-marker--selected':
                       dragArrowId === arrow.id && dragMode === 'update',
+                    'target-marker--focused': focusedArrowId === arrow.id,
+                    'target-marker--muted':
+                      focusedArrowId !== null && focusedArrowId !== arrow.id,
                   },
                 ]"
                 :transform="`translate(${getRenderedPoint(arrow).x} ${-getRenderedPoint(
@@ -1010,6 +1185,11 @@ await loadPage();
                 ).y})`"
                 @pointerdown.stop.prevent="handleMarkerPointerDown(arrow, $event)"
               >
+                <circle
+                  v-if="isDraggedArrow(arrow) || focusedArrowId === arrow.id"
+                  class="target-marker__halo"
+                  :r="getMarkerRadius(arrow)"
+                />
                 <circle class="target-marker__badge" :r="getMarkerRadius(arrow)" />
                 <text
                   class="target-marker__label"
@@ -1033,6 +1213,7 @@ await loadPage();
                     : ''
                 "
               >
+                <circle class="target-marker__halo" :r="ARROW_RADIUS_CM" />
                 <circle class="target-marker__badge" :r="ARROW_RADIUS_CM" />
                 <text
                   class="target-marker__label"
@@ -1070,6 +1251,11 @@ await loadPage();
         </section>
       </div>
     </template>
+    <div v-else-if="!pending" class="error-recovery">
+      <v-btn color="primary" prepend-icon="mdi-arrow-left" :to="backToEndsLink" variant="tonal">
+        Back
+      </v-btn>
+    </div>
 
     <v-snackbar v-model="snackbar.show" color="secondary">
       {{ snackbar.text }}
@@ -1083,6 +1269,11 @@ await loadPage();
   gap: 0.8rem;
   -webkit-user-select: none;
   user-select: none;
+}
+
+.error-recovery {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .toolbar-row,
@@ -1205,20 +1396,33 @@ await loadPage();
   position: relative;
   width: 2.55rem;
   height: 2.55rem;
+  padding: 0;
   border: 0;
   border-radius: 999px;
   display: grid;
   place-items: center;
+  appearance: none;
   font-family: "Avenir Next Condensed", "Gill Sans", "Trebuchet MS", sans-serif;
   font-size: 1.45rem;
   line-height: 1;
   color: #111827;
   box-shadow: 0 10px 24px rgba(17, 24, 39, 0.08);
+  cursor: pointer;
   transition: transform 0.18s ease, box-shadow 0.18s ease, outline-color 0.18s ease;
 }
 
 .score-badge:hover {
   transform: translateY(-1px);
+}
+
+.score-badge[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.score-badge--focused {
+  outline: 3px solid #1f5c3f;
+  outline-offset: 2px;
 }
 
 .score-badge--gold {
@@ -1233,6 +1437,17 @@ await loadPage();
 .score-badge--blue {
   background: #55a5e2;
   color: #ffffff;
+}
+
+.score-badge--black {
+  background: #1a1a1a;
+  color: #ffffff;
+}
+
+.score-badge--white {
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid rgba(17, 24, 39, 0.35);
 }
 
 .score-badge--miss {
@@ -1261,6 +1476,50 @@ await loadPage();
 .stage-status {
   min-height: 2.8rem;
   display: grid;
+  gap: 0.55rem;
+}
+
+.focus-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.6rem 0.5rem 0.85rem;
+  border-radius: 0.85rem;
+  background: rgba(31, 92, 63, 0.1);
+  color: #111827;
+  font-size: 0.95rem;
+}
+
+.focus-bar__label {
+  font-weight: 700;
+}
+
+.focus-bar__score {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 1.05rem;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.focus-bar__coords {
+  color: rgba(17, 24, 39, 0.7);
+  font-variant-numeric: tabular-nums;
+}
+
+.focus-bar__hint {
+  color: rgba(17, 24, 39, 0.6);
+}
+
+.focus-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
 }
 
 .drag-coordinates {
@@ -1338,6 +1597,23 @@ await loadPage();
   transition: transform 0.18s ease, fill 0.18s ease;
 }
 
+/*
+ * White halo painted underneath the badge, only ever present in the DOM for
+ * an actively dragged/created marker or the focused marker (see the
+ * `v-if="isDraggedArrow(arrow) || focusedArrowId === arrow.id"` and the
+ * create-draft `<g>` in the template). It never exists for other placed,
+ * non-dragged, non-focused markers, so their rendering is untouched by this
+ * rule. It separates a dragged/focused marker's fill from a same-hue ring
+ * behind it (notably gold-on-gold) beyond what the thin selected/draft
+ * stroke alone provides.
+ */
+.target-marker__halo {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 0.3;
+  pointer-events: none;
+}
+
 .target-marker__label {
   fill: #ffffff;
   font-family: "Avenir Next Condensed", "Gill Sans", "Trebuchet MS", sans-serif;
@@ -1369,18 +1645,44 @@ await loadPage();
   fill: #55a5e2;
 }
 
+.target-marker--black .target-marker__badge {
+  fill: #1a1a1a;
+}
+
+.target-marker--white .target-marker__badge {
+  fill: #ffffff;
+  stroke: #111827;
+  stroke-width: 0.08;
+}
+
+.target-marker--white .target-marker__label {
+  fill: #111827;
+}
+
 .target-marker--miss .target-marker__badge {
   fill: #d1d5db;
 }
 
-.target-marker--selected .target-marker__badge,
-.target-marker--draft .target-marker__badge {
-  fill: #1f5c3f;
+/*
+ * Non-focused markers are dimmed (not hidden) while one arrow is focused, so
+ * the group stays readable as context while the focused marker reads as the
+ * only live target.
+ */
+.target-marker--muted {
+  opacity: 0.38;
 }
 
-.target-marker--selected .target-marker__label,
-.target-marker--draft .target-marker__label {
-  fill: #ffffff;
+/*
+ * Selected/draft/focused is a highlight affordance layered on top of the
+ * per-score colour, not a replacement for it: only `stroke` is set here so
+ * the ring's gold/red/blue/black/white/miss fill (and matching label colour)
+ * always shows through while a marker is being placed, dragged, or focused.
+ */
+.target-marker--selected .target-marker__badge,
+.target-marker--draft .target-marker__badge,
+.target-marker--focused .target-marker__badge {
+  stroke: #1f5c3f;
+  stroke-width: 0.16;
 }
 
 @media (max-width: 720px) {
@@ -1441,6 +1743,16 @@ await loadPage();
     gap: 0.45rem;
     padding: 0.48rem 0.7rem;
     font-size: 0.84rem;
+  }
+
+  .focus-bar {
+    font-size: 0.84rem;
+    padding: 0.45rem 0.5rem 0.45rem 0.7rem;
+  }
+
+  .focus-bar__coords,
+  .focus-bar__hint {
+    display: none;
   }
 
   .stage-nav {

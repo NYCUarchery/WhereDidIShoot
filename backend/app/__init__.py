@@ -1,187 +1,74 @@
+import os
+from pathlib import Path
+
 from flask import Flask
-from sqlalchemy import inspect, text
+from flask_migrate import Migrate, upgrade
 
 from .config import Config
 from .extensions import db
-from . import models
-from .routes import INNER_TEN_SCORE_RADIUS_CM, api
+from .routes import api
+
+# Registering models with SQLAlchemy's metadata is a required import side
+# effect: without it, `target_metadata` (used by Alembic autogenerate) would
+# not know about any of the ORM-mapped tables.
+from . import models  # noqa: F401
+
+MIGRATIONS_DIR = str(Path(__file__).resolve().parent.parent / "migrations")
+
+migrate = Migrate()
 
 
-def sync_users_schema() -> None:
-    inspector = inspect(db.engine)
-    table_names = set(inspector.get_table_names())
-    if "users" not in table_names:
+def _run_db_upgrade_enabled() -> bool:
+    # Repair escape hatch: FLASK_APP=wsgi:app makes every `flask db ...`
+    # subcommand go through create_app(), which normally runs the boot-time
+    # upgrade first. If a migration is broken, that means `flask db current`,
+    # `flask db history`, and `flask db stamp` all fail the same way as the
+    # app itself, leaving an operator with no way to inspect or repair state.
+    # Set RUN_DB_UPGRADE=0/false/no to skip the upgrade and get a working
+    # shell for those subcommands.
+    return os.getenv("RUN_DB_UPGRADE", "1").strip().lower() not in ("0", "false", "no")
+
+
+def _upgrade_database() -> None:
+    engine = db.engine
+    if engine.dialect.name != "mysql":
+        upgrade(directory=MIGRATIONS_DIR)
         return
 
-    user_columns = {column["name"] for column in inspector.get_columns("users")}
-
-    with db.engine.begin() as connection:
-        if "password" not in user_columns and "password_hash" in user_columns:
-            connection.execute(
-                text(
-                    "ALTER TABLE users CHANGE COLUMN password_hash password "
-                    "VARCHAR(255) NOT NULL DEFAULT ''"
-                )
-            )
-            user_columns.remove("password_hash")
-            user_columns.add("password")
-        elif "password" not in user_columns:
-            connection.execute(
-                text("ALTER TABLE users ADD COLUMN password VARCHAR(255) NOT NULL DEFAULT ''")
-            )
-            user_columns.add("password")
-
-        if "password_hash" in user_columns:
-            connection.execute(text("ALTER TABLE users DROP COLUMN password_hash"))
-            user_columns.remove("password_hash")
-
-        if "email" in user_columns:
-            connection.execute(text("ALTER TABLE users DROP COLUMN email"))
-            user_columns.remove("email")
-
-        if "notes" in user_columns:
-            connection.execute(text("ALTER TABLE users DROP COLUMN notes"))
-            user_columns.remove("notes")
-
-
-def sync_practices_schema() -> None:
-    inspector = inspect(db.engine)
-    table_names = set(inspector.get_table_names())
-    if "practices" not in table_names:
-        return
-
-    practice_columns = {column["name"] for column in inspector.get_columns("practices")}
-    round_columns = (
-        {column["name"] for column in inspector.get_columns("rounds")}
-        if "rounds" in table_names
-        else set()
-    )
-
-    with db.engine.begin() as connection:
-        for column_name in ("title", "location", "practiced_on"):
-            if column_name in practice_columns:
-                connection.execute(text(f"ALTER TABLE practices DROP COLUMN {column_name}"))
-                practice_columns.remove(column_name)
-
-        if "distance_meters" not in practice_columns:
-            connection.execute(
-                text("ALTER TABLE practices ADD COLUMN distance_meters INTEGER NOT NULL DEFAULT 50")
-            )
-            practice_columns.add("distance_meters")
-
-        if "target_face_cm" not in practice_columns:
-            connection.execute(
-                text("ALTER TABLE practices ADD COLUMN target_face_cm INTEGER NOT NULL DEFAULT 80")
-            )
-            practice_columns.add("target_face_cm")
-
-        if {"distance_meters", "target_face_cm"}.issubset(round_columns):
-            practice_ids = connection.execute(
-                text("SELECT id FROM practices ORDER BY id ASC")
-            ).scalars()
-
-            for practice_id in practice_ids:
-                round_settings = connection.execute(
-                    text(
-                        "SELECT distance_meters, target_face_cm "
-                        "FROM rounds "
-                        "WHERE practice_id = :practice_id "
-                        "ORDER BY created_at ASC, id ASC "
-                        "LIMIT 1"
-                    ),
-                    {"practice_id": practice_id},
-                ).mappings().first()
-                if round_settings is None:
-                    continue
-
-                connection.execute(
-                    text(
-                        "UPDATE practices "
-                        "SET distance_meters = :distance_meters, "
-                        "target_face_cm = :target_face_cm "
-                        "WHERE id = :practice_id"
-                    ),
-                    {
-                        "practice_id": practice_id,
-                        "distance_meters": int(round_settings["distance_meters"]),
-                        "target_face_cm": int(round_settings["target_face_cm"]),
-                    },
-                )
-
-
-def sync_rounds_schema() -> None:
-    inspector = inspect(db.engine)
-    table_names = set(inspector.get_table_names())
-    if "rounds" not in table_names:
-        return
-
-    round_columns = {column["name"] for column in inspector.get_columns("rounds")}
-
-    with db.engine.begin() as connection:
-        if "round_order" not in round_columns:
-            connection.execute(
-                text("ALTER TABLE rounds ADD COLUMN round_order INTEGER NOT NULL DEFAULT 0")
-            )
-            round_columns.add("round_order")
-
-    practices = models.Practice.query.order_by(models.Practice.id.asc()).all()
-    for practice in practices:
-        rounds = (
-            models.Round.query.filter(models.Round.practice_id == practice.id)
-            .order_by(models.Round.created_at.asc(), models.Round.id.asc())
-            .all()
-        )
-
-        for index, round_record in enumerate(rounds, start=1):
-            round_record.round_order = index
-
-    db.session.commit()
-
-    with db.engine.begin() as connection:
-        for column_name in ("distance_meters", "target_face_cm"):
-            if column_name in round_columns:
-                connection.execute(text(f"ALTER TABLE rounds DROP COLUMN {column_name}"))
-
-
-def sync_arrows_schema() -> None:
-    inspector = inspect(db.engine)
-    table_names = set(inspector.get_table_names())
-    if "arrows" not in table_names:
-        return
-
-    arrow_columns = {column["name"] for column in inspector.get_columns("arrows")}
-
-    with db.engine.begin() as connection:
-        if "score_mark" not in arrow_columns:
-            connection.execute(
-                text("ALTER TABLE arrows ADD COLUMN score_mark VARCHAR(1) NOT NULL DEFAULT ''")
-            )
-            arrow_columns.add("score_mark")
-
-        connection.execute(
-            text(
-                "UPDATE arrows "
-                "SET score_mark = 'M' "
-                "WHERE score = 0 AND (score_mark IS NULL OR score_mark = '')"
-            )
-        )
-        connection.execute(
-            text(
-                "UPDATE arrows "
-                "SET score_mark = 'X' "
-                "WHERE score = 10 "
-                "AND SQRT(POW(x, 2) + POW(y, 2)) <= :inner_ten_score_radius_cm "
-                "AND (score_mark IS NULL OR score_mark = '')"
-            ),
-            {"inner_ten_score_radius_cm": INNER_TEN_SCORE_RADIUS_CM},
-        )
-
-
-def ensure_schema() -> None:
-    sync_users_schema()
-    sync_practices_schema()
-    sync_rounds_schema()
-    sync_arrows_schema()
+    # GET_LOCK is scoped to the connection that acquired it, so the lock must
+    # be held on this same connection for the whole upgrade. This guards
+    # against the race between the two gunicorn workers (see
+    # backend/gunicorn.conf.py, workers = 2, no preload_app) both booting and
+    # attempting to run migrations concurrently.
+    #
+    # The wait per attempt (and the total across retries) must stay well
+    # under gunicorn.conf.py's `timeout = 60`: gunicorn's arbiter kills a
+    # worker whose last_update exceeds `timeout` with no exemption for
+    # workers still booting, so a wait sitting at/near 60s races the arbiter's
+    # kill signal. 10s x 3 attempts keeps the worst case around 30s.
+    with engine.connect() as connection:
+        acquired = None
+        for _ in range(3):
+            acquired = connection.exec_driver_sql(
+                "SELECT GET_LOCK('wdis_schema_migration', 10)"
+            ).scalar()
+            if acquired == 1:
+                break
+            # acquired is 0 (timed out) or None (error): not acquired, retry.
+        if acquired != 1:
+            raise RuntimeError("timed out waiting for the schema migration lock")
+        try:
+            upgrade(directory=MIGRATIONS_DIR)
+        finally:
+            try:
+                # Best-effort release: if upgrade() failed because the
+                # connection died, RELEASE_LOCK would itself raise here and
+                # replace the original exception/traceback. The lock is
+                # released automatically by MariaDB when the connection
+                # drops, so it's safe to swallow this failure.
+                connection.exec_driver_sql("SELECT RELEASE_LOCK('wdis_schema_migration')")
+            except Exception:
+                pass
 
 
 def create_app() -> Flask:
@@ -189,10 +76,11 @@ def create_app() -> Flask:
     app.config.from_object(Config)
 
     db.init_app(app)
+    migrate.init_app(app, db, directory=MIGRATIONS_DIR)
     app.register_blueprint(api)
 
-    with app.app_context():
-        db.create_all()
-        ensure_schema()
+    if _run_db_upgrade_enabled():
+        with app.app_context():
+            _upgrade_database()
 
     return app
