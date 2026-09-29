@@ -1,8 +1,12 @@
 openapi: 3.0.3
 info:
   title: WhereDidIShoot API
-  version: 0.2.0
-  description: OpenAPI definition for the Flask backend.
+  version: 0.3.0
+  description: >-
+    OpenAPI definition for the Flask backend. Practices, rounds, and ends are
+    soft-deleted and retained indefinitely. Records hidden by their own or an
+    ancestor's deletion are excluded from lists and return 404 for item access.
+    Creating or moving a record under a hidden parent returns 400.
 servers:
   - url: /api
     description: Nginx-routed API base path
@@ -151,10 +155,16 @@ paths:
       tags:
         - Users
       operationId: deleteUser
-      summary: Delete a user and all child records
+      summary: Delete a user with no practices
       responses:
         "204":
           description: User deleted successfully.
+        "409":
+          description: The user still has practices, including soft-deleted practices.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -163,7 +173,7 @@ paths:
       tags:
         - Practices
       operationId: listPractices
-      summary: List practices
+      summary: List visible practices
       parameters:
         - $ref: "#/components/parameters/UserIdFilter"
       responses:
@@ -241,10 +251,10 @@ paths:
       tags:
         - Practices
       operationId: deletePractice
-      summary: Delete a practice and all child records
+      summary: Soft-delete a practice and hide its descendants
       responses:
         "204":
-          description: Practice deleted successfully.
+          description: Practice hidden successfully. All records are retained.
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -253,7 +263,7 @@ paths:
       tags:
         - Rounds
       operationId: listRounds
-      summary: List rounds
+      summary: List visible rounds in ascending ID order
       parameters:
         - $ref: "#/components/parameters/PracticeIdFilter"
       responses:
@@ -331,10 +341,10 @@ paths:
       tags:
         - Rounds
       operationId: deleteRound
-      summary: Delete a round and all child records
+      summary: Soft-delete a round and hide its descendants
       responses:
         "204":
-          description: Round deleted successfully.
+          description: Round hidden successfully. All records are retained.
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -343,7 +353,7 @@ paths:
       tags:
         - Ends
       operationId: listEnds
-      summary: List ends
+      summary: List visible ends in ascending ID order
       parameters:
         - $ref: "#/components/parameters/RoundIdFilter"
       responses:
@@ -421,10 +431,10 @@ paths:
       tags:
         - Ends
       operationId: deleteEnd
-      summary: Delete an end and all child records
+      summary: Soft-delete an end and hide its arrows
       responses:
         "204":
-          description: End deleted successfully.
+          description: End hidden successfully. All records are retained.
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -433,7 +443,7 @@ paths:
       tags:
         - Arrows
       operationId: listArrows
-      summary: List arrows
+      summary: List arrows with visible ancestors
       parameters:
         - $ref: "#/components/parameters/EndIdFilter"
       responses:
@@ -607,7 +617,7 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
     NotFound:
-      description: The requested record was not found.
+      description: The requested record was not found or is hidden by a deletion.
       content:
         application/json:
           schema:
@@ -765,7 +775,6 @@ components:
       required:
         - id
         - practice_id
-        - round_order
         - name
         - notes
         - total_score
@@ -777,9 +786,6 @@ components:
         practice_id:
           type: integer
           minimum: 1
-        round_order:
-          type: integer
-          minimum: 1
         name:
           type: string
         notes:
@@ -787,6 +793,7 @@ components:
         total_score:
           type: integer
           minimum: 0
+          description: Sum of arrow scores from visible ends only.
         created_at:
           type: string
           format: date-time
@@ -811,7 +818,6 @@ components:
       required:
         - id
         - round_id
-        - end_number
         - notes
         - total_score
         - created_at
@@ -820,9 +826,6 @@ components:
           type: integer
           minimum: 1
         round_id:
-          type: integer
-          minimum: 1
-        end_number:
           type: integer
           minimum: 1
         notes:
@@ -840,9 +843,6 @@ components:
         - round_id
       properties:
         round_id:
-          type: integer
-          minimum: 1
-        end_number:
           type: integer
           minimum: 1
         notes:

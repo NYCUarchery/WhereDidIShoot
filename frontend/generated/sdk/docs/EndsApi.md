@@ -5,9 +5,9 @@ All URIs are relative to */api*
 | Method | HTTP request | Description |
 |------------- | ------------- | -------------|
 | [**createEnd**](EndsApi.md#createend) | **POST** /ends | Create an end |
-| [**deleteEnd**](EndsApi.md#deleteend) | **DELETE** /ends/{end_id} | Delete an end and all child records |
+| [**deleteEnd**](EndsApi.md#deleteend) | **DELETE** /ends/{end_id} | Soft-delete an end and hide its arrows |
 | [**getEnd**](EndsApi.md#getend) | **GET** /ends/{end_id} | Get an end |
-| [**listEnds**](EndsApi.md#listends) | **GET** /ends | List ends |
+| [**listEnds**](EndsApi.md#listends) | **GET** /ends | List visible ends in ascending ID order |
 | [**updateEnd**](EndsApi.md#updateend) | **PUT** /ends/{end_id} | Update an end |
 
 
@@ -82,7 +82,7 @@ No authorization required
 
 > deleteEnd(endId)
 
-Delete an end and all child records
+Soft-delete an end and hide its arrows
 
 ### Example
 
@@ -138,8 +138,8 @@ No authorization required
 ### HTTP response details
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
-| **204** | End deleted successfully. |  -  |
-| **404** | The requested record was not found. |  -  |
+| **204** | End hidden successfully. All records are retained. |  -  |
+| **404** | The requested record was not found or is hidden by a deletion. |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
@@ -205,7 +205,7 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** | End returned successfully. |  -  |
-| **404** | The requested record was not found. |  -  |
+| **404** | The requested record was not found or is hidden by a deletion. |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
@@ -214,7 +214,7 @@ No authorization required
 
 > Array&lt;EndRecord&gt; listEnds(roundId)
 
-List ends
+List visible ends in ascending ID order
 
 ### Example
 
@@ -341,7 +341,7 @@ No authorization required
 |-------------|-------------|------------------|
 | **200** | End updated successfully. |  -  |
 | **400** | Request validation failed. |  -  |
-| **404** | The requested record was not found. |  -  |
+| **404** | The requested record was not found or is hidden by a deletion. |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 

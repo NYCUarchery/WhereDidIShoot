@@ -5,9 +5,9 @@ All URIs are relative to */api*
 | Method | HTTP request | Description |
 |------------- | ------------- | -------------|
 | [**createPractice**](PracticesApi.md#createpractice) | **POST** /practices | Create a practice |
-| [**deletePractice**](PracticesApi.md#deletepractice) | **DELETE** /practices/{practice_id} | Delete a practice and all child records |
+| [**deletePractice**](PracticesApi.md#deletepractice) | **DELETE** /practices/{practice_id} | Soft-delete a practice and hide its descendants |
 | [**getPractice**](PracticesApi.md#getpractice) | **GET** /practices/{practice_id} | Get a practice |
-| [**listPractices**](PracticesApi.md#listpractices) | **GET** /practices | List practices |
+| [**listPractices**](PracticesApi.md#listpractices) | **GET** /practices | List visible practices |
 | [**updatePractice**](PracticesApi.md#updatepractice) | **PUT** /practices/{practice_id} | Update a practice |
 
 
@@ -82,7 +82,7 @@ No authorization required
 
 > deletePractice(practiceId)
 
-Delete a practice and all child records
+Soft-delete a practice and hide its descendants
 
 ### Example
 
@@ -138,8 +138,8 @@ No authorization required
 ### HTTP response details
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
-| **204** | Practice deleted successfully. |  -  |
-| **404** | The requested record was not found. |  -  |
+| **204** | Practice hidden successfully. All records are retained. |  -  |
+| **404** | The requested record was not found or is hidden by a deletion. |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
@@ -205,7 +205,7 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** | Practice returned successfully. |  -  |
-| **404** | The requested record was not found. |  -  |
+| **404** | The requested record was not found or is hidden by a deletion. |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
@@ -214,7 +214,7 @@ No authorization required
 
 > Array&lt;PracticeRecord&gt; listPractices(userId)
 
-List practices
+List visible practices
 
 ### Example
 
@@ -341,7 +341,7 @@ No authorization required
 |-------------|-------------|------------------|
 | **200** | Practice updated successfully. |  -  |
 | **400** | Request validation failed. |  -  |
-| **404** | The requested record was not found. |  -  |
+| **404** | The requested record was not found or is hidden by a deletion. |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 

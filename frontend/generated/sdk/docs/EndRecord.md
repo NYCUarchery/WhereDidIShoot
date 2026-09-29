@@ -8,7 +8,6 @@ Name | Type
 ------------ | -------------
 `id` | number
 `round_id` | number
-`end_number` | number
 `notes` | string
 `total_score` | number
 `created_at` | string

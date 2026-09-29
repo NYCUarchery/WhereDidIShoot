@@ -84,7 +84,7 @@ async function deletePractice(practice: PracticeRecord) {
   }
 
   if (import.meta.client) {
-    const confirmed = window.confirm("Delete this practice and all of its rounds and arrows?");
+    const confirmed = window.confirm("Remove this practice from the screen? Its data will be kept.");
     if (!confirmed) {
       return;
     }
@@ -96,7 +96,7 @@ async function deletePractice(practice: PracticeRecord) {
   try {
     await practicesApi.remove(practice.id);
     await loadPractices();
-    notify("Practice deleted.");
+    notify("Practice removed from the screen.");
   } catch (error) {
     errorMessage.value = getErrorMessage(error);
   } finally {

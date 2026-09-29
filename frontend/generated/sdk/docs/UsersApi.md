@@ -5,7 +5,7 @@ All URIs are relative to */api*
 | Method | HTTP request | Description |
 |------------- | ------------- | -------------|
 | [**createUser**](UsersApi.md#createuser) | **POST** /users | Create a user |
-| [**deleteUser**](UsersApi.md#deleteuser) | **DELETE** /users/{user_id} | Delete a user and all child records |
+| [**deleteUser**](UsersApi.md#deleteuser) | **DELETE** /users/{user_id} | Delete a user with no practices |
 | [**getUser**](UsersApi.md#getuser) | **GET** /users/{user_id} | Get a user |
 | [**listUsers**](UsersApi.md#listusers) | **GET** /users | List users |
 | [**updateUser**](UsersApi.md#updateuser) | **PUT** /users/{user_id} | Update a user |
@@ -82,7 +82,7 @@ No authorization required
 
 > deleteUser(userId)
 
-Delete a user and all child records
+Delete a user with no practices
 
 ### Example
 
@@ -139,7 +139,8 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **204** | User deleted successfully. |  -  |
-| **404** | The requested record was not found. |  -  |
+| **409** | The user still has practices, including soft-deleted practices. |  -  |
+| **404** | The requested record was not found or is hidden by a deletion. |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
@@ -205,7 +206,7 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** | User returned successfully. |  -  |
-| **404** | The requested record was not found. |  -  |
+| **404** | The requested record was not found or is hidden by a deletion. |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
@@ -332,7 +333,7 @@ No authorization required
 |-------------|-------------|------------------|
 | **200** | User updated successfully. |  -  |
 | **400** | Request validation failed. |  -  |
-| **404** | The requested record was not found. |  -  |
+| **404** | The requested record was not found or is hidden by a deletion. |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
