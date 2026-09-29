@@ -5,9 +5,9 @@ All URIs are relative to */api*
 | Method | HTTP request | Description |
 |------------- | ------------- | -------------|
 | [**createRound**](RoundsApi.md#createround) | **POST** /rounds | Create a round |
-| [**deleteRound**](RoundsApi.md#deleteround) | **DELETE** /rounds/{round_id} | Delete a round and all child records |
+| [**deleteRound**](RoundsApi.md#deleteround) | **DELETE** /rounds/{round_id} | Soft-delete a round and hide its descendants |
 | [**getRound**](RoundsApi.md#getround) | **GET** /rounds/{round_id} | Get a round |
-| [**listRounds**](RoundsApi.md#listrounds) | **GET** /rounds | List rounds |
+| [**listRounds**](RoundsApi.md#listrounds) | **GET** /rounds | List visible rounds in ascending ID order |
 | [**updateRound**](RoundsApi.md#updateround) | **PUT** /rounds/{round_id} | Update a round |
 
 
@@ -82,7 +82,7 @@ No authorization required
 
 > deleteRound(roundId)
 
-Delete a round and all child records
+Soft-delete a round and hide its descendants
 
 ### Example
 
@@ -138,8 +138,8 @@ No authorization required
 ### HTTP response details
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
-| **204** | Round deleted successfully. |  -  |
-| **404** | The requested record was not found. |  -  |
+| **204** | Round hidden successfully. All records are retained. |  -  |
+| **404** | The requested record was not found or is hidden by a deletion. |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
@@ -205,7 +205,7 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** | Round returned successfully. |  -  |
-| **404** | The requested record was not found. |  -  |
+| **404** | The requested record was not found or is hidden by a deletion. |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
@@ -214,7 +214,7 @@ No authorization required
 
 > Array&lt;RoundRecord&gt; listRounds(practiceId)
 
-List rounds
+List visible rounds in ascending ID order
 
 ### Example
 
@@ -341,7 +341,7 @@ No authorization required
 |-------------|-------------|------------------|
 | **200** | Round updated successfully. |  -  |
 | **400** | Request validation failed. |  -  |
-| **404** | The requested record was not found. |  -  |
+| **404** | The requested record was not found or is hidden by a deletion. |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 

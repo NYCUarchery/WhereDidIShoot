@@ -25,7 +25,7 @@ class User(TimestampMixin, db.Model):
     practices = db.relationship(
         "Practice",
         back_populates="user",
-        cascade="all, delete-orphan",
+        passive_deletes="all",
         order_by=lambda: (Practice.created_at.desc(), Practice.id.desc()),
     )
 
@@ -59,13 +59,14 @@ class Practice(TimestampMixin, db.Model):
         server_default="compound",
     )
     notes = db.Column(db.Text, nullable=False, default="")
+    deleted_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     user = db.relationship("User", back_populates="practices")
     rounds = db.relationship(
         "Round",
         back_populates="practice",
         cascade="all, delete-orphan",
-        order_by=lambda: (Round.round_order.asc(), Round.id.asc()),
+        order_by=lambda: Round.id.asc(),
     )
 
     def to_dict(self) -> dict[str, object]:
@@ -90,16 +91,16 @@ class Round(TimestampMixin, db.Model):
         nullable=False,
         index=True,
     )
-    round_order = db.Column(db.Integer, nullable=False, default=1)
     name = db.Column(db.String(160), nullable=False)
     notes = db.Column(db.Text, nullable=False, default="")
+    deleted_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     practice = db.relationship("Practice", back_populates="rounds")
     ends = db.relationship(
         "End",
         back_populates="round",
         cascade="all, delete-orphan",
-        order_by=lambda: (End.end_number.asc(), End.id.asc()),
+        order_by=lambda: End.id.asc(),
     )
 
     @property
@@ -110,7 +111,7 @@ class Round(TimestampMixin, db.Model):
         total = (
             db.session.query(func.coalesce(func.sum(Arrow.score), 0))
             .join(End, Arrow.end_id == End.id)
-            .filter(End.round_id == self.id)
+            .filter(End.round_id == self.id, End.deleted_at.is_(None))
             .scalar()
         )
         return int(total or 0)
@@ -119,7 +120,6 @@ class Round(TimestampMixin, db.Model):
         return {
             "id": self.id,
             "practice_id": self.practice_id,
-            "round_order": self.round_order,
             "name": self.name,
             "notes": self.notes,
             "total_score": self.total_score,
@@ -132,8 +132,8 @@ class End(TimestampMixin, db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     round_id = db.Column(db.Integer, db.ForeignKey("rounds.id"), nullable=False, index=True)
-    end_number = db.Column(db.Integer, nullable=False)
     notes = db.Column(db.Text, nullable=False, default="")
+    deleted_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     round = db.relationship("Round", back_populates="ends")
     arrows = db.relationship(
@@ -159,7 +159,6 @@ class End(TimestampMixin, db.Model):
         return {
             "id": self.id,
             "round_id": self.round_id,
-            "end_number": self.end_number,
             "notes": self.notes,
             "total_score": self.total_score,
             "created_at": self.created_at.isoformat(),

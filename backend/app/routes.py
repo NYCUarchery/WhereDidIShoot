@@ -5,9 +5,10 @@ import math
 
 from flask import Blueprint, jsonify, request
 from sqlalchemy import func, text
+from sqlalchemy.exc import IntegrityError
 
 from .extensions import db
-from .models import Arrow, End, Practice, Round, User
+from .models import Arrow, End, Practice, Round, User, utc_now
 
 
 api = Blueprint("api", __name__, url_prefix="/api")
@@ -96,31 +97,67 @@ def derive_arrow_score_mark(score: int, x: float, y: float) -> str:
     return ""
 
 
-def require_record(model, record_id: int, *, name: str):
-    record = db.session.get(model, record_id)
+def require_visible_record(query, model, record_id: int, *, name: str):
+    record = query.filter(model.id == record_id).first()
     if record is None:
         return jsonify({"message": f"{name} not found."}), 404
     return record
 
 
+def visible_practices():
+    return Practice.query.filter(Practice.deleted_at.is_(None))
+
+
+def visible_rounds():
+    return (
+        Round.query.join(Practice, Round.practice_id == Practice.id)
+        .filter(Round.deleted_at.is_(None), Practice.deleted_at.is_(None))
+    )
+
+
+def visible_ends():
+    return (
+        End.query.join(Round, End.round_id == Round.id)
+        .join(Practice, Round.practice_id == Practice.id)
+        .filter(
+            End.deleted_at.is_(None),
+            Round.deleted_at.is_(None),
+            Practice.deleted_at.is_(None),
+        )
+    )
+
+
+def visible_arrows():
+    return (
+        Arrow.query.join(End, Arrow.end_id == End.id)
+        .join(Round, End.round_id == Round.id)
+        .join(Practice, Round.practice_id == Practice.id)
+        .filter(
+            End.deleted_at.is_(None),
+            Round.deleted_at.is_(None),
+            Practice.deleted_at.is_(None),
+        )
+    )
+
+
 def load_user(user_id: int):
-    return require_record(User, user_id, name="User")
+    return require_visible_record(User.query, User, user_id, name="User")
 
 
 def load_practice(practice_id: int):
-    return require_record(Practice, practice_id, name="Practice")
+    return require_visible_record(visible_practices(), Practice, practice_id, name="Practice")
 
 
 def load_round(round_id: int):
-    return require_record(Round, round_id, name="Round")
+    return require_visible_record(visible_rounds(), Round, round_id, name="Round")
 
 
 def load_end(end_id: int):
-    return require_record(End, end_id, name="End")
+    return require_visible_record(visible_ends(), End, end_id, name="End")
 
 
 def load_arrow(arrow_id: int):
-    return require_record(Arrow, arrow_id, name="Arrow")
+    return require_visible_record(visible_arrows(), Arrow, arrow_id, name="Arrow")
 
 
 def apply_user_payload(user: User, data: dict) -> User:
@@ -177,8 +214,8 @@ def apply_practice_payload(practice: Practice, data: dict) -> Practice:
 
 def apply_round_payload(round_record: Round, data: dict) -> Round:
     practice_id = parse_int(data.get("practice_id"), "practice_id", minimum=1)
-    if db.session.get(Practice, practice_id) is None:
-        raise ValidationError("practice_id does not reference an existing practice.")
+    if visible_practices().filter(Practice.id == practice_id).first() is None:
+        raise ValidationError("practice_id does not reference a visible practice.")
 
     round_record.practice_id = practice_id
     round_record.name = clean_text(data.get("name"), "name", required=True)
@@ -188,20 +225,18 @@ def apply_round_payload(round_record: Round, data: dict) -> Round:
 
 def apply_end_payload(end_record: End, data: dict) -> End:
     round_id = parse_int(data.get("round_id"), "round_id", minimum=1)
-    if db.session.get(Round, round_id) is None:
-        raise ValidationError("round_id does not reference an existing round.")
+    if visible_rounds().filter(Round.id == round_id).first() is None:
+        raise ValidationError("round_id does not reference a visible round.")
 
     end_record.round_id = round_id
-    if "end_number" in data and data.get("end_number") is not None:
-        end_record.end_number = parse_int(data.get("end_number"), "end_number", minimum=1)
     end_record.notes = clean_text(data.get("notes"), "notes")
     return end_record
 
 
 def apply_arrow_payload(arrow: Arrow, data: dict) -> Arrow:
     end_id = parse_int(data.get("end_id"), "end_id", minimum=1)
-    if db.session.get(End, end_id) is None:
-        raise ValidationError("end_id does not reference an existing end.")
+    if visible_ends().filter(End.id == end_id).first() is None:
+        raise ValidationError("end_id does not reference a visible end.")
 
     arrow_number = parse_int(data.get("arrow_number"), "arrow_number", minimum=1)
     if arrow_number > MAX_ARROWS_PER_END:
@@ -236,46 +271,6 @@ def apply_arrow_payload(arrow: Arrow, data: dict) -> Arrow:
     arrow.y = y
     arrow.notes = clean_text(data.get("notes"), "notes")
     return arrow
-
-
-def next_round_order(practice_id: int, *, exclude_round_id: int | None = None) -> int:
-    query = db.session.query(func.max(Round.round_order)).filter(Round.practice_id == practice_id)
-    if exclude_round_id is not None:
-        query = query.filter(Round.id != exclude_round_id)
-
-    max_order = query.scalar()
-    return int(max_order or 0) + 1
-
-
-def next_end_number(round_id: int, *, exclude_end_id: int | None = None) -> int:
-    query = db.session.query(func.max(End.end_number)).filter(End.round_id == round_id)
-    if exclude_end_id is not None:
-        query = query.filter(End.id != exclude_end_id)
-
-    max_number = query.scalar()
-    return int(max_number or 0) + 1
-
-
-def resequence_rounds(practice_id: int) -> None:
-    rounds = (
-        Round.query.filter(Round.practice_id == practice_id)
-        .order_by(Round.round_order.asc(), Round.created_at.asc(), Round.id.asc())
-        .all()
-    )
-
-    for index, round_record in enumerate(rounds, start=1):
-        round_record.round_order = index
-
-
-def resequence_ends(round_id: int) -> None:
-    ends = (
-        End.query.filter(End.round_id == round_id)
-        .order_by(End.end_number.asc(), End.created_at.asc(), End.id.asc())
-        .all()
-    )
-
-    for index, end_record in enumerate(ends, start=1):
-        end_record.end_number = index
 
 
 @api.get("/health")
@@ -365,15 +360,21 @@ def users_item(user_id: int):
         db.session.commit()
         return jsonify(user.to_dict())
 
-    db.session.delete(user)
-    db.session.commit()
+    if Practice.query.filter(Practice.user_id == user.id).first() is not None:
+        return jsonify({"message": "User has practices."}), 409
+    try:
+        db.session.delete(user)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"message": "User has practices."}), 409
     return "", 204
 
 
 @api.route("/practices", methods=["GET", "POST"])
 def practices_collection():
     if request.method == "GET":
-        query = Practice.query
+        query = visible_practices()
         user_id = request.args.get("user_id")
         if user_id:
             query = query.filter(Practice.user_id == parse_int(user_id, "user_id", minimum=1))
@@ -401,7 +402,7 @@ def practices_item(practice_id: int):
         db.session.commit()
         return jsonify(practice.to_dict())
 
-    db.session.delete(practice)
+    practice.deleted_at = utc_now()
     db.session.commit()
     return "", 204
 
@@ -409,18 +410,17 @@ def practices_item(practice_id: int):
 @api.route("/rounds", methods=["GET", "POST"])
 def rounds_collection():
     if request.method == "GET":
-        query = Round.query
+        query = visible_rounds()
         practice_id = request.args.get("practice_id")
         if practice_id:
             query = query.filter(
                 Round.practice_id == parse_int(practice_id, "practice_id", minimum=1)
             )
 
-        rounds = query.order_by(Round.round_order.asc(), Round.id.asc()).all()
+        rounds = query.order_by(Round.id.asc()).all()
         return jsonify([round_record.to_dict() for round_record in rounds])
 
     round_record = apply_round_payload(Round(), require_json_body())
-    round_record.round_order = next_round_order(round_record.practice_id)
     db.session.add(round_record)
     db.session.commit()
     return jsonify(round_record.to_dict()), 201
@@ -436,22 +436,11 @@ def rounds_item(round_id: int):
         return jsonify(round_record.to_dict())
 
     if request.method == "PUT":
-        previous_practice_id = round_record.practice_id
         apply_round_payload(round_record, require_json_body())
-        if round_record.practice_id != previous_practice_id:
-            round_record.round_order = next_round_order(
-                round_record.practice_id,
-                exclude_round_id=round_record.id,
-            )
-            resequence_rounds(previous_practice_id)
-
-        resequence_rounds(round_record.practice_id)
         db.session.commit()
         return jsonify(round_record.to_dict())
 
-    practice_id = round_record.practice_id
-    db.session.delete(round_record)
-    resequence_rounds(practice_id)
+    round_record.deleted_at = utc_now()
     db.session.commit()
     return "", 204
 
@@ -459,16 +448,15 @@ def rounds_item(round_id: int):
 @api.route("/ends", methods=["GET", "POST"])
 def ends_collection():
     if request.method == "GET":
-        query = End.query
+        query = visible_ends()
         round_id = request.args.get("round_id")
         if round_id:
             query = query.filter(End.round_id == parse_int(round_id, "round_id", minimum=1))
 
-        ends = query.order_by(End.end_number.asc(), End.id.asc()).all()
+        ends = query.order_by(End.id.asc()).all()
         return jsonify([end_record.to_dict() for end_record in ends])
 
     end_record = apply_end_payload(End(), require_json_body())
-    end_record.end_number = next_end_number(end_record.round_id)
     db.session.add(end_record)
     db.session.commit()
     return jsonify(end_record.to_dict()), 201
@@ -484,22 +472,11 @@ def ends_item(end_id: int):
         return jsonify(end_record.to_dict())
 
     if request.method == "PUT":
-        previous_round_id = end_record.round_id
         apply_end_payload(end_record, require_json_body())
-        if end_record.round_id != previous_round_id:
-            end_record.end_number = next_end_number(
-                end_record.round_id,
-                exclude_end_id=end_record.id,
-            )
-            resequence_ends(previous_round_id)
-
-        resequence_ends(end_record.round_id)
         db.session.commit()
         return jsonify(end_record.to_dict())
 
-    round_id = end_record.round_id
-    db.session.delete(end_record)
-    resequence_ends(round_id)
+    end_record.deleted_at = utc_now()
     db.session.commit()
     return "", 204
 
@@ -507,7 +484,7 @@ def ends_item(end_id: int):
 @api.route("/arrows", methods=["GET", "POST"])
 def arrows_collection():
     if request.method == "GET":
-        query = Arrow.query
+        query = visible_arrows()
         end_id = request.args.get("end_id")
         if end_id:
             query = query.filter(Arrow.end_id == parse_int(end_id, "end_id", minimum=1))

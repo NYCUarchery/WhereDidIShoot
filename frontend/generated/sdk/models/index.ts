@@ -148,12 +148,6 @@ export interface EndInput {
     round_id: number;
     /**
      * 
-     * @type {number}
-     * @memberof EndInput
-     */
-    end_number?: number;
-    /**
-     * 
      * @type {string}
      * @memberof EndInput
      */
@@ -177,12 +171,6 @@ export interface EndRecord {
      * @memberof EndRecord
      */
     round_id: number;
-    /**
-     * 
-     * @type {number}
-     * @memberof EndRecord
-     */
-    end_number: number;
     /**
      * 
      * @type {string}
@@ -463,12 +451,6 @@ export interface RoundRecord {
     practice_id: number;
     /**
      * 
-     * @type {number}
-     * @memberof RoundRecord
-     */
-    round_order: number;
-    /**
-     * 
      * @type {string}
      * @memberof RoundRecord
      */
@@ -480,7 +462,7 @@ export interface RoundRecord {
      */
     notes: string;
     /**
-     * 
+     * Sum of arrow scores from visible ends only.
      * @type {number}
      * @memberof RoundRecord
      */

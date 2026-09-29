@@ -75,6 +75,7 @@ const end = ref<EndRecord | null>(null);
 const round = ref<RoundRecord | null>(null);
 const practice = ref<PracticeRecord | null>(null);
 const roundEnds = ref<EndRecord[]>([]);
+const practiceRounds = ref<RoundRecord[]>([]);
 const errorMessage = ref("");
 const pending = ref(false);
 const saving = ref(false);
@@ -104,6 +105,9 @@ const totalScore = computed(() =>
 );
 const currentEndIndex = computed(() =>
   end.value ? roundEnds.value.findIndex((item) => item.id === end.value.id) : -1
+);
+const currentRoundIndex = computed(() =>
+  round.value ? practiceRounds.value.findIndex((item) => item.id === round.value.id) : -1
 );
 const previousEnd = computed(() =>
   currentEndIndex.value > 0 ? roundEnds.value[currentEndIndex.value - 1] : null
@@ -493,6 +497,7 @@ async function loadPage() {
   practice.value = null;
   arrows.value = [];
   roundEnds.value = [];
+  practiceRounds.value = [];
   focusedArrowId.value = null;
 
   try {
@@ -502,13 +507,16 @@ async function loadPage() {
 
     const currentEnd = await endsApi.get(endId.value);
     const roundPromise = roundsApi.get(currentEnd.round_id);
-    const [currentRound, currentPractice, endArrows, siblingEnds] = await Promise.all([
+    const [currentRound, currentPractice, endArrows, siblingEnds, siblingRounds] = await Promise.all([
       roundPromise,
       roundPromise.then((currentRoundResult) =>
         practicesApi.get(currentRoundResult.practice_id)
       ),
       arrowsApi.list({ end_id: endId.value }),
       endsApi.list({ round_id: currentEnd.round_id }),
+      roundPromise.then((currentRoundResult) =>
+        roundsApi.list({ practice_id: currentRoundResult.practice_id })
+      ),
     ]);
 
     if (!resolveTargetFaceConfig(currentPractice)) {
@@ -526,6 +534,7 @@ async function loadPage() {
     practice.value = currentPractice;
     arrows.value = endArrows;
     roundEnds.value = siblingEnds;
+    practiceRounds.value = siblingRounds;
   } catch (error) {
     errorMessage.value = getErrorMessage(error);
   } finally {
@@ -990,7 +999,7 @@ await loadPage();
             <v-btn icon="mdi-arrow-left" :to="backToEndsLink" variant="text" />
             <div class="toolbar-copy">
               <p class="eyebrow mb-0">
-                Round {{ round?.round_order ?? "?" }} · End {{ end.end_number }}
+                Round {{ currentRoundIndex + 1 }} · End {{ currentEndIndex + 1 }}
               </p>
             </div>
           </div>

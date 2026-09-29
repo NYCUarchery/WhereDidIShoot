@@ -48,11 +48,17 @@ const roundNoteForm = reactive({
 });
 
 const ends = ref<EndRecord[]>([]);
+const practiceRounds = ref<RoundRecord[]>([]);
 const selectedPractice = ref<PracticeRecord | null>(null);
 const selectedRound = ref<RoundRecord | null>(null);
 
 const practicePageLink = computed(() =>
   selectedPractice.value ? `/practices/${selectedPractice.value.id}` : "/"
+);
+const currentRoundIndex = computed(() =>
+  selectedRound.value
+    ? practiceRounds.value.findIndex((item) => item.id === selectedRound.value.id)
+    : -1
 );
 
 type EndWithArrows = EndRecord & { arrows: ArrowRecord[] };
@@ -72,6 +78,7 @@ async function loadPage() {
   loadingEnds.value = true;
   errorMessage.value = "";
   ends.value = [];
+  practiceRounds.value = [];
   selectedPractice.value = null;
   selectedRound.value = null;
 
@@ -86,7 +93,11 @@ async function loadPage() {
     }
 
     const round = await roundsApi.get(roundId);
-    const practice = await practicesApi.get(round.practice_id);
+    const [practice, siblingRounds, roundEnds] = await Promise.all([
+      practicesApi.get(round.practice_id),
+      roundsApi.list({ practice_id: round.practice_id }),
+      endsApi.list({ round_id: round.id }),
+    ]);
     if (practice.user_id !== sessionUser.value.id) {
       throw new Error("That round is not available for the signed-in user.");
     }
@@ -94,7 +105,8 @@ async function loadPage() {
     selectedPractice.value = practice;
     selectedRound.value = round;
     roundNoteForm.notes = round.notes;
-    ends.value = await endsApi.list({ round_id: round.id });
+    practiceRounds.value = siblingRounds;
+    ends.value = roundEnds;
   } catch (error) {
     errorMessage.value = getErrorMessage(error);
   } finally {
@@ -123,12 +135,14 @@ async function createEnd() {
   }
 }
 
-async function deleteEnd(end: EndRecord) {
+async function deleteEnd(end: EndRecord, endOrdinal: number) {
   if (!import.meta.client) {
     return;
   }
 
-  const confirmed = window.confirm(`Delete End ${end.end_number}? This also removes its arrows.`);
+  const confirmed = window.confirm(
+    `Remove End ${endOrdinal} from the screen? Its data will be kept.`
+  );
   if (!confirmed) {
     return;
   }
@@ -138,8 +152,8 @@ async function deleteEnd(end: EndRecord) {
 
   try {
     await endsApi.remove(end.id);
-    notify(`End ${end.end_number} deleted.`);
     await loadPage();
+    notify(`End ${endOrdinal} removed from the screen.`);
   } catch (error) {
     errorMessage.value = getErrorMessage(error);
   } finally {
@@ -212,7 +226,11 @@ async function buildRoundJsonPayload() {
     username,
     practice: selectedPractice.value,
     ...round,
-    ends: endsWithArrows,
+    round_order: currentRoundIndex.value + 1,
+    ends: endsWithArrows.map((end, endIndex) => ({
+      ...end,
+      end_number: endIndex + 1,
+    })),
   };
 }
 
@@ -303,6 +321,7 @@ await loadPage();
 
       <section v-if="selectedRound" class="stack">
         <v-card class="context-card" rounded="xl">
+          <p class="eyebrow">Round {{ currentRoundIndex + 1 }}</p>
           <div class="chip-row">
             <v-btn
               color="secondary"
@@ -395,14 +414,14 @@ await loadPage();
 
         <div v-else class="list-stack">
           <v-card
-            v-for="end in ends"
+            v-for="(end, endIndex) in ends"
             :key="end.id"
             class="list-card"
             rounded="xl"
             @click="openEnd(end)"
           >
             <div class="list-card__top">
-              <h4>End {{ end.end_number }}</h4>
+              <h4>End {{ endIndex + 1 }}</h4>
               <div class="list-card__actions">
                 <v-btn
                   color="error"
@@ -411,8 +430,8 @@ await loadPage();
                   variant="text"
                   :loading="deletingEndId === end.id"
                   :disabled="deletingEndId !== null && deletingEndId !== end.id"
-                  :aria-label="`Delete end ${end.end_number}`"
-                  @click.stop="deleteEnd(end)"
+                  :aria-label="`Delete end ${endIndex + 1}`"
+                  @click.stop="deleteEnd(end, endIndex + 1)"
                 />
                 <v-icon color="primary" icon="mdi-chevron-right" />
               </div>

@@ -168,14 +168,14 @@ function openRound(round: RoundRecord) {
   return navigateTo(`/rounds/${round.id}`);
 }
 
-async function deleteRound(round: RoundRecord) {
+async function deleteRound(round: RoundRecord, roundOrdinal: number) {
   if (deletingRoundId.value !== null) {
     return;
   }
 
   if (
     import.meta.client &&
-    !window.confirm(`Delete Round ${round.round_order} and all of its ends and arrows?`)
+    !window.confirm(`Remove Round ${roundOrdinal} from the screen? Its data will be kept.`)
   ) {
     return;
   }
@@ -186,7 +186,7 @@ async function deleteRound(round: RoundRecord) {
   try {
     await roundsApi.remove(round.id);
     await loadPage();
-    notify(`Round ${round.round_order} deleted.`);
+    notify(`Round ${roundOrdinal} removed from the screen.`);
   } catch (error) {
     errorMessage.value = getErrorMessage(error);
   } finally {
@@ -213,9 +213,13 @@ async function buildPracticeJsonPayload() {
   const practice = selectedPractice.value;
   const username = sessionUser.value.name;
   const roundsWithChildren: RoundWithChildren[] = await Promise.all(
-    rounds.value.map(async (round) => ({
+    rounds.value.map(async (round, roundIndex) => ({
       ...round,
-      ends: await loadEndsWithArrows(round.id),
+      round_order: roundIndex + 1,
+      ends: (await loadEndsWithArrows(round.id)).map((end, endIndex) => ({
+        ...end,
+        end_number: endIndex + 1,
+      })),
     }))
   );
 
@@ -403,24 +407,24 @@ await loadPage();
 
         <div v-else class="list-stack">
           <v-card
-            v-for="round in rounds"
+            v-for="(round, roundIndex) in rounds"
             :key="round.id"
             class="list-card"
             rounded="xl"
             @click="openRound(round)"
           >
             <div class="list-card__top">
-              <h4>Round {{ round.round_order }}</h4>
+              <h4>Round {{ roundIndex + 1 }}</h4>
               <div class="list-card__actions">
                 <v-btn
                   color="error"
                   density="comfortable"
                   icon="mdi-delete-outline"
                   variant="text"
-                  :aria-label="`Delete round ${round.round_order}`"
+                  :aria-label="`Delete round ${roundIndex + 1}`"
                   :disabled="deletingRoundId !== null && deletingRoundId !== round.id"
                   :loading="deletingRoundId === round.id"
-                  @click.stop="deleteRound(round)"
+                  @click.stop="deleteRound(round, roundIndex + 1)"
                 />
                 <v-icon color="primary" icon="mdi-chevron-right" />
               </div>

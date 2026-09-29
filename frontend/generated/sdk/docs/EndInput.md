@@ -7,7 +7,6 @@
 Name | Type
 ------------ | -------------
 `round_id` | number
-`end_number` | number
 `notes` | string
 
 

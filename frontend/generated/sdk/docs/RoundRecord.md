@@ -8,7 +8,6 @@ Name | Type
 ------------ | -------------
 `id` | number
 `practice_id` | number
-`round_order` | number
 `name` | string
 `notes` | string
 `total_score` | number

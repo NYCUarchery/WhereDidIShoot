@@ -7,7 +7,7 @@ All URIs are relative to */api*
 | [**createArrow**](ArrowsApi.md#createarrow) | **POST** /arrows | Create an arrow |
 | [**deleteArrow**](ArrowsApi.md#deletearrow) | **DELETE** /arrows/{arrow_id} | Delete an arrow |
 | [**getArrow**](ArrowsApi.md#getarrow) | **GET** /arrows/{arrow_id} | Get an arrow |
-| [**listArrows**](ArrowsApi.md#listarrows) | **GET** /arrows | List arrows |
+| [**listArrows**](ArrowsApi.md#listarrows) | **GET** /arrows | List arrows with visible ancestors |
 | [**updateArrow**](ArrowsApi.md#updatearrow) | **PUT** /arrows/{arrow_id} | Update an arrow |
 
 
@@ -139,7 +139,7 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **204** | Arrow deleted successfully. |  -  |
-| **404** | The requested record was not found. |  -  |
+| **404** | The requested record was not found or is hidden by a deletion. |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
@@ -205,7 +205,7 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** | Arrow returned successfully. |  -  |
-| **404** | The requested record was not found. |  -  |
+| **404** | The requested record was not found or is hidden by a deletion. |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
@@ -214,7 +214,7 @@ No authorization required
 
 > Array&lt;ArrowRecord&gt; listArrows(endId)
 
-List arrows
+List arrows with visible ancestors
 
 ### Example
 
@@ -341,7 +341,7 @@ No authorization required
 |-------------|-------------|------------------|
 | **200** | Arrow updated successfully. |  -  |
 | **400** | Request validation failed. |  -  |
-| **404** | The requested record was not found. |  -  |
+| **404** | The requested record was not found or is hidden by a deletion. |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
